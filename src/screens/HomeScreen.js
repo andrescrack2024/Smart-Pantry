@@ -255977,7 +255977,7 @@ function HomeScreenContent() {
 
 
 
-                      <View style={styles.strengthBarBg}>
+                       <View style={[styles.strengthBarBg, { backgroundColor: isDark ? '#3A3A3C' : '#E2E8F0' }]}>
 
 
 
@@ -257257,7 +257257,7 @@ function HomeScreenContent() {
 
 
 
-                    <View style={[styles.passwordContainer, fieldErrors.pass && styles.inputError]}>
+                    <View style={[styles.passwordContainer, { backgroundColor: isDark ? '#2A2A2D' : '#F3F4F6' }, fieldErrors.pass && styles.inputError]}>
 
 
 
@@ -260457,7 +260457,7 @@ function HomeScreenContent() {
 
 
 
-                      <View style={[styles.passwordContainer, fieldErrors.confirmPass && styles.inputError]}>
+                       <View style={[styles.passwordContainer, { backgroundColor: isDark ? '#2A2A2D' : '#F3F4F6' }, fieldErrors.confirmPass && styles.inputError]}>
 
 
 
