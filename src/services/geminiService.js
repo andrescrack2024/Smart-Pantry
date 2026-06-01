@@ -125,6 +125,59 @@ Para cada alimento identificado en "detectedItems", incluye:
 
 Devuelve ÚNICAMENTE el objeto JSON puro, sin explicaciones adicionales y sin delimitadores de código markdown como \`\`\`json ni \`\`\`.`;
 
+
+/**
+ * Realiza una llamada directa en la nube a Groq Llama 3.2 Vision para fallback de escaneo.
+ * 
+ * @param {string} cleanBase64 - Imagen en Base64 limpia.
+ * @returns {Promise<Object>} Resultado JSON parseado de alimentos.
+ */
+const scanWithGroqDirect = async (cleanBase64) => {
+  const apiKey = process.env.EXPO_PUBLIC_GROQ_API_KEY;
+  if (!apiKey) {
+    throw new Error("Clave API de Groq no configurada.");
+  }
+  
+  console.log("📡 Conectando directamente con Groq Llama 3.2 Vision...");
+  
+  const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${apiKey}`
+    },
+    body: JSON.stringify({
+      model: "llama-3.2-11b-vision-preview",
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: SYSTEM_PROMPT },
+            {
+              type: "image_url",
+              image_url: {
+                url: `data:image/jpeg;base64,${cleanBase64}`
+              }
+            }
+          ]
+        }
+      ],
+      temperature: 0.1,
+      response_format: { type: "json_object" }
+    })
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Error de Groq API: ${response.status} - ${errorText}`);
+  }
+
+  const result = await response.json();
+  const content = result.choices[0].message.content;
+  console.log("📥 Respuesta directa de Groq Vision recibida.");
+  return extraerJSON(content);
+};
+
 /**
  * Escanea una imagen en Base64 e identifica los alimentos contenidos de forma inteligente.
  * Intenta llamar al servidor local de microservicios primero.
@@ -190,27 +243,47 @@ export const scanReceipt = async (base64Image) => {
     }
   }
 
-  // 2. FALLBACK: EJECUTAR GEMINI VISION DIRECTAMENTE EN LA APP MÓVIL
-  console.log("⚡ Servidor local inaccesible. Activando fallback directo en el móvil...");
+  // 2. FALLBACK: EJECUTAR CLOUD VISION DIRECTAMENTE EN LA APP MÓVIL/WEB
+  console.log("⚡ Servidor local inaccesible. Activando fallback directo...");
   
-  if (!model) {
-    throw new Error("🚨 El servidor de microservicios está apagado y la clave API directa de Gemini no está configurada.");
+  let parsedResult = null;
+  let usedService = "";
+  
+  // A. Intentar Groq Primero (prioritario a petición del usuario)
+  if (process.env.EXPO_PUBLIC_GROQ_API_KEY) {
+    try {
+      parsedResult = await scanWithGroqDirect(cleanBase64);
+      usedService = "Groq Llama Vision";
+    } catch (groqErr) {
+      console.warn("⚠️ Falló fallback directo de Groq:", groqErr.message);
+    }
   }
-
+  
+  // B. Si Groq falló o no estaba configurado, intentar Gemini
+  if (!parsedResult && model) {
+    try {
+      console.log("📡 Conectando directamente con Gemini Vision...");
+      const imagePart = {
+        inlineData: {
+          data: cleanBase64,
+          mimeType: "image/jpeg",
+        },
+      };
+      const result = await model.generateContent([SYSTEM_PROMPT, imagePart]);
+      const responseText = result.response.text();
+      parsedResult = extraerJSON(responseText);
+      usedService = "Gemini Vision";
+    } catch (geminiErr) {
+      console.warn("⚠️ Falló fallback directo de Gemini:", geminiErr.message);
+    }
+  }
+  
+  if (!parsedResult) {
+    throw new Error("🚨 El servidor de microservicios está apagado y los fallbacks de IA en la nube (Groq/Gemini) fallaron o no están configurados.");
+  }
+  
   try {
-    const imagePart = {
-      inlineData: {
-        data: cleanBase64,
-        mimeType: "image/jpeg",
-      },
-    };
-
-    const result = await model.generateContent([SYSTEM_PROMPT, imagePart]);
-    const responseText = result.response.text();
-    console.log("📥 Respuesta directa de Gemini recibida.");
-
-    const parsedResult = extraerJSON(responseText);
-    const isFood = parsedResult.isFoodRelated ?? true; // Tolerancia amigable por defecto
+    const isFood = parsedResult.isFoodRelated ?? true;
     let detected = parsedResult.detectedItems ?? [];
     
     if (isFood && detected.length === 0) {
@@ -224,14 +297,14 @@ export const scanReceipt = async (base64Image) => {
     
     return {
       isFoodRelated: isFood,
-      confidenceReason: parsedResult.confidenceReason ?? "Análisis IA móvil completado.",
+      confidenceReason: parsedResult.confidenceReason ?? `Análisis IA en la nube (${usedService}) completado.`,
       data: detected
     };
   } catch (error) {
-    console.error("🚨 Error crítico al procesar la imagen con Gemini directo:", error);
+    console.error("🚨 Error crítico al procesar la imagen con fallback directo:", error);
     let friendlyMessage = error.message;
     if (friendlyMessage && (friendlyMessage.includes("leaked") || friendlyMessage.includes("403") || friendlyMessage.includes("404") || friendlyMessage.includes("API key") || friendlyMessage.includes("not found"))) {
-      friendlyMessage = "La clave API directa de la app móvil ha caducado o está deshabilitada. Asegúrate de iniciar los microservicios locales en tu PC ejecutando el script 'start_services.ps1' para usar el motor de escaneo inteligente offline.";
+      friendlyMessage = "La clave API directa de la app móvil ha caducado o está deshabilitada. Asegúrate de iniciar los microservicios locales en tu PC ejecutando el script 'start_services.ps1' o configurar una clave válida en Render.";
     }
     throw new Error(friendlyMessage || "Fallo de conexión con la IA de respaldo.");
   }
