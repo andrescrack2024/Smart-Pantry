@@ -153494,6 +153494,14 @@ function HomeScreenContent() {
 
 
   const toggleFavorite = (id, productName) => {
+    if (!isAuthenticated) {
+      customAlert(
+        "Acceso Restringido",
+        "Para guardar productos en tus favoritos y sincronizarlos, por favor inicia sesión o crea una cuenta."
+      );
+      setShowAuthModal(true);
+      return;
+    }
 
 
 
@@ -158614,6 +158622,14 @@ function HomeScreenContent() {
 
 
   const openCameraOptions = () => {
+    if (!isAuthenticated) {
+      customAlert(
+        "Acceso Restringido",
+        "El escáner inteligente con IA y el procesamiento de fotos requieren una cuenta en la nube. ¡Inicia sesión o crea una cuenta en segundos!"
+      );
+      setShowAuthModal(true);
+      return;
+    }
 
 
 
