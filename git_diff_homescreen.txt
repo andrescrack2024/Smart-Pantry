@@ -1,0 +1,1797 @@
+diff --git a/src/screens/HomeScreen.js b/src/screens/HomeScreen.js
+index de115cf..4437a62 100644
+--- a/src/screens/HomeScreen.js
++++ b/src/screens/HomeScreen.js
+@@ -1,30 +1,51 @@
+-import React, { useState, useEffect } from 'react';
++
++import React, { useState, useEffect, useRef } from 'react';
+ import { 
+   View, Text, Image, ActivityIndicator, Alert, StyleSheet, 
+   ScrollView, TouchableOpacity, Platform, StatusBar,
+-  Modal, TextInput, Dimensions, KeyboardAvoidingView
++  Modal, TextInput, Dimensions, KeyboardAvoidingView, PanResponder,
++  useWindowDimensions, TouchableWithoutFeedback
+ } from 'react-native';
+ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+ import * as ImagePicker from 'expo-image-picker';
++import * as Clipboard from 'expo-clipboard';
++import { LinearGradient } from 'expo-linear-gradient';
+ import { Ionicons } from '@expo/vector-icons';
++import AsyncStorage from '@react-native-async-storage/async-storage';
++import { useFonts } from 'expo-font';
+ 
+ // Firebase Auth & Firestore
+ import { auth, db } from '../services/firebaseConfig';
+ import { 
++  
+   createUserWithEmailAndPassword, 
+   signInWithEmailAndPassword, 
+   onAuthStateChanged, 
+-  signOut 
++  signOut,
++  GoogleAuthProvider,
++  FacebookAuthProvider,
++  signInWithPopup,
++  sendEmailVerification,
++  PhoneAuthProvider,
++  signInWithPhoneNumber,
++  RecaptchaVerifier
+ } from 'firebase/auth';
+ import { 
+   doc, 
+   getDoc, 
+   setDoc, 
+   updateDoc, 
+-  Timestamp 
++  Timestamp,
++  collection,
++  query,
++  where,
++  getDocs,
++  limit,
++  addDoc
+ } from 'firebase/firestore';
+ 
+ // Importamos servicios de escaneo y despensa
++
+ import { scanReceipt } from '../services/geminiService'; 
+ import ScannerScreen from './ScannerScreen';
+ import { 
+@@ -51,6 +72,48 @@ const CONSERVATION_TIPS = {
+   "Otros": "Mantén este alimento sellado en tu despensa inteligente para prolongar al máximo su vida útil y frescura."
+ };
+ 
++// Sanitización de entradas para evitar XSS, HTML y Script Injection
++const sanitizeInput = (text) => {
++  if (typeof text !== 'string') return '';
++  // 1. Eliminar etiquetas <script> y su contenido
++  let cleanText = text.replace(/<script[^>]*>([\S\s]*?)<\/script>/gi, '');
++  // 2. Eliminar cualquier otra etiqueta HTML
++  cleanText = cleanText.replace(/<[^>]*>/g, '');
++  // 3. Escapar caracteres HTML especiales para desactivar su ejecución
++  cleanText = cleanText
++    .replace(/&/g, '&amp;')
++    .replace(/</g, '&lt;')
++    .replace(/>/g, '&gt;')
++    .replace(/"/g, '&quot;')
++    .replace(/'/g, '&#x27;')
++    .replace(/\//g, '&#x2F;');
++  return cleanText.trim();
++};
++
++const getPasswordStrength = (pass) => {
++  let score = 0;
++  if (pass.length >= 8) score++;
++  if (/[A-Z]/.test(pass)) score++;
++  if (/[a-z]/.test(pass)) score++;
++  if (/[0-9]/.test(pass)) score++;
++  if (/[@$!%*?&#.+-]/.test(pass)) score++;
++  return score;
++};
++
++const getStrengthColor = (score) => {
++  if (score === 0) return '#CBD5E1';
++  if (score <= 2) return '#EF5350';
++  if (score <= 4) return '#F59E0B';
++  return '#10B981';
++};
++
++const getStrengthText = (score) => {
++  if (score === 0) return 'Ninguna';
++  if (score <= 2) return 'Débil ❌';
++  if (score <= 4) return 'Media ⚠️';
++  return 'Excelente y Segura ✅';
++};
++
+ const InputField = ({ placeholder, value, onChangeText, error, onClearError, ...props }) => (
+   <View style={{ marginBottom: 14 }}>
+     <TextInput 
+@@ -70,6 +133,8 @@ const InputField = ({ placeholder, value, onChangeText, error, onClearError, ...
+ 
+ function HomeScreenContent() {
+   const insets = useSafeAreaInsets();
++  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
++  const isDesktopWeb = Platform.OS === 'web' && windowWidth > 485;
+ 
+   // --- ESTADOS DE NAVEGACIÓN Y CONFIGURACIÓN ---
+   const [activeTab, setActiveTab] = useState('inicio'); 
+@@ -83,12 +148,79 @@ function HomeScreenContent() {
+   const [authMode, setAuthMode] = useState('register'); // 'register' o 'login'
+   const [showPassword, setShowPassword] = useState(false);
+   const [authLoading, setAuthLoading] = useState(false);
++  const [isProfileUpdating, setIsProfileUpdating] = useState(false);
++  const [isEmailVerified, setIsEmailVerified] = useState(true);
++  const [showEmailVerificationModal, setShowEmailVerificationModal] = useState(false);
++  const [countdown, setCountdown] = useState(0);
++
++  const [customAlertState, setCustomAlertState] = useState({
++    visible: false,
++    title: '',
++    message: '',
++    type: 'alert',
++    confirmText: 'Aceptar',
++    cancelText: 'Cancelar',
++    onConfirm: null,
++    onCancel: null,
++    actions: []
++  });
++
++  // Helpers para alertas, confirmaciones y hojas de acción personalizadas
++  const customAlert = (title, message) => {
++    setCustomAlertState({
++      visible: true,
++      title,
++      message,
++      type: 'alert',
++      confirmText: 'Aceptar',
++      cancelText: 'Cancelar',
++      onConfirm: () => setCustomAlertState(prev => ({ ...prev, visible: false })),
++      onCancel: null,
++      actions: []
++    });
++  };
++
++  const customConfirm = (title, message, confirmText, onConfirm) => {
++    setCustomAlertState({
++      visible: true,
++      title,
++      message,
++      type: 'confirm',
++      confirmText,
++      cancelText: 'Cancelar',
++      onConfirm: () => {
++        setCustomAlertState(prev => ({ ...prev, visible: false }));
++        if (onConfirm) onConfirm();
++      },
++      onCancel: () => setCustomAlertState(prev => ({ ...prev, visible: false })),
++      actions: []
++    });
++  };
++
++  const customActions = (title, message, actions) => {
++    setCustomAlertState({
++      visible: true,
++      title,
++      message,
++      type: 'actions',
++      confirmText: 'Cancelar',
++      cancelText: 'Cancelar',
++      onConfirm: () => setCustomAlertState(prev => ({ ...prev, visible: false })),
++      onCancel: null,
++      actions: actions || []
++    });
++  };
+   
+   // Campos del formulario
+   const [regUser, setRegUser] = useState('');
+   const [regEmail, setRegEmail] = useState('');
+   const [regPass, setRegPass] = useState('');
+   const [regConfirmPass, setRegConfirmPass] = useState('');
++  const [phoneInput, setPhoneInput] = useState('');
++  const [smsCodeInput, setSmsCodeInput] = useState('');
++  const [showSmsModal, setShowSmsModal] = useState(false);
++  const [phoneConfirmation, setPhoneConfirmation] = useState(null);
++  const [phoneAuthLoading, setPhoneAuthLoading] = useState(false);
+   const [fieldErrors, setFieldErrors] = useState({});
+ 
+   // --- ESTADO DEL PERFIL DE USUARIO PERSISTENTE ---
+@@ -116,21 +248,63 @@ function HomeScreenContent() {
+   // --- MODAL DE DETALLES Y EDITOR DEL ALIMENTO ---
+   const [selectedProduct, setSelectedProduct] = useState(null);
+   const [showDetailModal, setShowDetailModal] = useState(false);
++  const [imageErrors, setImageErrors] = useState({});
+   
+   // Campos editables del alimento seleccionado
+   const [editName, setEditName] = useState('');
+   const [editCategory, setEditCategory] = useState('Otros');
++  
+   const [editQuantity, setEditQuantity] = useState('1 ud');
+   const [editDaysLeft, setEditDaysLeft] = useState(7);
+ 
++  // --- TEMPORIZADOR DE REENVO DE VERIFICACIN DE CORREO ---
++  useEffect(() => {
++    let interval;
++    if (countdown > 0) {
++      interval = setInterval(() => {
++        setCountdown(prev => prev - 1);
++      }, 1000);
++    }
++    return () => clearInterval(interval);
++  }, [countdown]);
++
++  // --- CARGA INICIAL DE TEMAS DESDE CACH LOCAL (SIN PERFIL CACH) ---
++  useEffect(() => {
++    const loadLocalProfile = async () => {
++      try {
++        const localTheme = await AsyncStorage.getItem('@smart_pantry_theme_color');
++        
++        if (localTheme) {
++          setThemeColor(localTheme);
++        }
++      } catch (e) {
++        console.log("Error al cargar perfil local:", e);
++      }
++    };
++    loadLocalProfile();
++  }, []);
++
+   // ==========================================
+   // LISTENER DE FIREBASE AUTH & FIRESTORE PROFILE
++  // ==========================================
++
+   // ==========================================
+   useEffect(() => {
+     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
++      
+       if (user) {
+         setIsAuthenticated(true);
+         console.log("Usuario autenticado:", user.uid);
++
++        // --- CONTROL DE VERIFICACIN DE EMAIL ---
++        const isPasswordProvider = user.providerData.some(p => p.providerId === 'password');
++        if (isPasswordProvider && !user.emailVerified) {
++          setIsEmailVerified(false);
++          setShowEmailVerificationModal(true);
++        } else {
++          setIsEmailVerified(true);
++          setShowEmailVerificationModal(false);
++        }
+         
+         try {
+           const userDocRef = doc(db, 'users', user.uid);
+@@ -255,6 +429,15 @@ function HomeScreenContent() {
+     return re.test(email);
+   };
+ 
++  const validatePasswordStrength = (password) => {
++    const minLength = password.length >= 8;
++    const hasUpper = /[A-Z]/.test(password);
++    const hasLower = /[a-z]/.test(password);
++    const hasNumber = /[0-9]/.test(password);
++    const hasSpecial = /[@$!%*?&#.+-]/.test(password);
++    return minLength && hasUpper && hasLower && hasNumber && hasSpecial;
++  };
++
+   const validateFields = () => {
+     const errors = {};
+     
+@@ -268,7 +451,9 @@ function HomeScreenContent() {
+     }
+     if (!regPass) {
+       errors.pass = "La contraseña es obligatoria";
+-    } else if (regPass.length < 6) {
++    } else if (authMode === 'register' && !validatePasswordStrength(regPass)) {
++      errors.pass = "La contraseña debe cumplir con todos los requisitos de seguridad";
++    } else if (authMode === 'login' && regPass.length < 6) {
+       errors.pass = "La contraseña debe tener al menos 6 caracteres";
+     }
+     if (authMode === 'register') {
+@@ -297,13 +482,24 @@ function HomeScreenContent() {
+   const handleRegister = async () => {
+     if (!validateFields()) return;
+     
++    const sanitizedUser = sanitizeInput(regUser);
++    const sanitizedEmail = sanitizeInput(regEmail);
++    
+     setAuthLoading(true);
+     try {
+-      const userCredential = await createUserWithEmailAndPassword(auth, regEmail.trim(), regPass);
++      
++      const userCredential = await createUserWithEmailAndPassword(auth, sanitizedEmail, regPass);
+       const user = userCredential.user;
+       
++      // Enviar correo de verificacin real al registrarse
++      try {
++        await sendEmailVerification(user);
++      } catch (err) {
++        console.log("Error enviando correo de verificacin inicial:", err);
++      }
++      
+       const newProfile = {
+-        name: regUser.trim() || user.email.split('@')[0],
++        name: sanitizedUser || user.email.split('@')[0],
+         email: user.email,
+         photo: null,
+         familyCode: "Aún no generado"
+@@ -312,10 +508,16 @@ function HomeScreenContent() {
+       await setDoc(doc(db, 'users', user.uid), newProfile);
+       setUserProfile(newProfile);
+       
+-      addHistoryLog(`Cuenta creada exitosamente: ${regUser.trim()}`);
++      
++      addHistoryLog(`Cuenta creada exitosamente: ${sanitizedUser}`);
+       resetAuthFields();
+       setShowAuthModal(false);
+-      Alert.alert("¡Registro Exitoso!", `Bienvenido a SmartPantry, ${regUser.trim()}.`);
++      
++      // Alerta explicativa premium con llamada de atencin a revisar Gmail
++      customAlert(
++        " Enlace de Verificacin Enviado", 
++        `Bienvenido a SmartPantry, ${sanitizedUser}!\n\nEnviamos un correo de verificacin seguro a tu cuenta de Gmail:\n${user.email}.\n\nPor favor, haz clic en el enlace para activar tu cuenta e iniciar sesin.`
++      );
+     } catch (error) {
+       handleFirebaseError(error);
+     } finally {
+@@ -326,9 +528,11 @@ function HomeScreenContent() {
+   const handleLogin = async () => {
+     if (!validateFields()) return;
+     
++    const sanitizedEmail = sanitizeInput(regEmail);
++    
+     setAuthLoading(true);
+     try {
+-      const userCredential = await signInWithEmailAndPassword(auth, regEmail.trim(), regPass);
++      const userCredential = await signInWithEmailAndPassword(auth, sanitizedEmail, regPass);
+       const user = userCredential.user;
+       
+       const userDocSnap = await getDoc(doc(db, 'users', user.uid));
+@@ -362,6 +566,242 @@ function HomeScreenContent() {
+     }
+   };
+ 
++  // ==========================================
++  // METODOS DE VERIFICACIÓN DE CORREO (GMAIL)
++  // ==========================================
++  const checkVerification = async () => {
++    if (auth.currentUser) {
++      await auth.currentUser.reload();
++      if (auth.currentUser.emailVerified) {
++        setIsEmailVerified(true);
++        setShowEmailVerificationModal(false);
++        customAlert("¡Cuenta Activada!", "Tu cuenta de correo ha sido verificada con éxito.");
++      } else {
++        customAlert("Correo No verificado", "Aún no has hecho clic en el enlace de verificación en tu Gmail.");
++      }
++    }
++  };
++
++  const resendVerification = async () => {
++    if (auth.currentUser) {
++      try {
++        await sendEmailVerification(auth.currentUser);
++        customAlert("¡Reenviado!", "Se reenvió el enlace de verificación a tu Gmail.");
++        setCountdown(60); // Iniciar temporizador de 60 segundos
++      } catch (e) {
++        console.error(e);
++        customAlert("Error", "No se pudo reenviar. Intenta de nuevo en unos minutos.");
++      }
++    }
++  };
++
++  // ==========================================
++  // SOCIAL LOGINS: GOOGLE & FACEBOOK (FIREBASE OAUTH)
++  // ==========================================
++  const handleGoogleLogin = async () => {
++    setAuthLoading(true);
++    try {
++      const provider = new GoogleAuthProvider();
++      // En Web, signInWithPopup funciona excelente y de inmediato
++      const result = await signInWithPopup(auth, provider);
++      const user = result.user;
++      
++      const userDocRef = doc(db, 'users', user.uid);
++      const userDocSnap = await getDoc(userDocRef);
++      
++      let photoUrl = user.photoURL || null;
++      let finalName = user.displayName || user.email.split('@')[0];
++      
++      if (userDocSnap.exists()) {
++        const userData = userDocSnap.data();
++        setUserProfile({
++          name: userData.name || finalName,
++          email: user.email,
++          photo: userData.photo || photoUrl,
++          familyCode: userData.familyCode || "Aún no generado"
++        });
++      } else {
++        const newProfile = {
++          name: finalName,
++          email: user.email,
++          photo: photoUrl,
++          familyCode: "Aún no generado",
++          themeColor: themeColor
++        };
++        await setDoc(userDocRef, newProfile);
++        setUserProfile(newProfile);
++      }
++      
++      addHistoryLog(`Sesión iniciada con Google: ${user.email}`);
++      setShowAuthModal(false);
++      customAlert("¡Bienvenido!", `Sesión iniciada con tu cuenta de Google.`);
++    } catch (error) {
++      console.error("Error Google Auth:", error);
++      const msg = error.code === 'auth/operation-not-allowed'
++        ? "El proveedor de Google no está habilitado en tu consola de Firebase. Ve a Authentication -> Sign-in method y actívalo."
++        : `Detalle: ${error.code} - ${error.message}`;
++      customAlert("Error Google Auth", `No se pudo iniciar sesión con Google.\n\n${msg}`);
++    } finally {
++      setAuthLoading(false);
++    }
++  };
++
++  const handleFacebookLogin = async () => {
++    setAuthLoading(true);
++    try {
++      const provider = new FacebookAuthProvider();
++      const result = await signInWithPopup(auth, provider);
++      const user = result.user;
++      
++      const userDocRef = doc(db, 'users', user.uid);
++      const userDocSnap = await getDoc(userDocRef);
++      
++      let photoUrl = user.photoURL || null;
++      let finalName = user.displayName || user.email.split('@')[0];
++      
++      if (userDocSnap.exists()) {
++        const userData = userDocSnap.data();
++        setUserProfile({
++          name: userData.name || finalName,
++          email: user.email,
++          photo: userData.photo || photoUrl,
++          familyCode: userData.familyCode || "Aún no generado"
++        });
++      } else {
++        const newProfile = {
++          name: finalName,
++          email: user.email,
++          photo: photoUrl,
++          familyCode: "Aún no generado",
++          themeColor: themeColor
++        };
++        await setDoc(userDocRef, newProfile);
++        setUserProfile(newProfile);
++      }
++      
++      addHistoryLog(`Sesión iniciada con Facebook: ${user.email}`);
++      setShowAuthModal(false);
++      customAlert("¡Bienvenido!", `Sesión iniciada con tu cuenta de Facebook.`);
++    } catch (error) {
++      console.error("Error Facebook Auth:", error);
++      const msg = error.code === 'auth/operation-not-allowed'
++        ? "El proveedor de Facebook no está habilitado en tu consola de Firebase. Ve a Authentication -> Sign-in method, actívalo de forma gratuita e ingresa el ID y el Secreto de tu App de Facebook Developers."
++        : `Detalle: ${error.code} - ${error.message}`;
++      customAlert("Error Facebook Auth", `No se pudo iniciar sesión con Facebook.\n\n${msg}`);
++    } finally {
++      setAuthLoading(false);
++    }
++  };
++
++  // ==========================================
++  // AUTENTICACIÓN POR TELÉFONO (SMS OTP SANDBOX)
++  // ==========================================
++  const setupRecaptcha = () => {
++    if (Platform.OS === 'web' && !window.recaptchaVerifier) {
++      window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
++        size: 'invisible',
++        callback: (response) => {
++          // reCAPTCHA resuelto
++        }
++      });
++    }
++  };
++
++  const handleSendSms = async () => {
++    const phoneVal = regEmail.trim();
++    if (!phoneVal) return customAlert("Número inválido", "Por favor ingresa tu número telefónico.");
++    setPhoneInput(phoneVal);
++    
++    setPhoneAuthLoading(true);
++    try {
++      if (Platform.OS === 'web') {
++        setupRecaptcha();
++        const appVerifier = window.recaptchaVerifier;
++        const confirmationResult = await signInWithPhoneNumber(auth, phoneVal, appVerifier);
++        setPhoneConfirmation(confirmationResult);
++        setShowSmsModal(true);
++      } else {
++        // En entornos no web, mostramos el modal para simular Sandbox
++        setShowSmsModal(true);
++      }
++      customAlert("Código Enviado", "Hemos enviado un código de verificación SMS a tu teléfono celular.");
++    } catch (err) {
++      console.error("Error enviando SMS:", err);
++      customAlert("Error de SMS", "No se pudo enviar el SMS. Asegúrate de incluir el indicativo de país (ej: +573123456789) y configurar Sandbox si usas números de prueba.");
++    } finally {
++      setPhoneAuthLoading(false);
++    }
++  };
++
++  const handleVerifySmsCode = async () => {
++    if (!smsCodeInput.trim() || smsCodeInput.trim().length !== 6) {
++      return customAlert("Código Inválido", "Por favor ingresa el código de 6 dígitos.");
++    }
++    
++    setPhoneAuthLoading(true);
++    try {
++      let user;
++      if (phoneConfirmation) {
++        const result = await phoneConfirmation.confirm(smsCodeInput.trim());
++        user = result.user;
++      } else {
++        // Sandbox mock en local para sustentación si no hay cargada una verificación real de red
++        if (smsCodeInput.trim() === "123456") {
++          customAlert("¡Éxito!", "Acceso telefónico simulado correctamente (código Sandbox 123456).");
++          setShowSmsModal(false);
++          setShowAuthModal(false);
++          // Creamos perfil local de invitado/mock
++          setUserProfile({
++            name: `Usuario_${phoneInput.slice(-4)}`,
++            email: `${phoneInput}@smartpantry.com`,
++            photo: null,
++            familyCode: "Aún no generado"
++          });
++          setIsAuthenticated(true);
++          return;
++        } else {
++          return customAlert("Error", "El código ingresado es incorrecto. Intenta con 123456.");
++        }
++      }
++      
++      // Sincronizar en Firestore
++      const userDocRef = doc(db, 'users', user.uid);
++      const userDocSnap = await getDoc(userDocRef);
++      
++      const phoneEmail = `${user.phoneNumber}@smartpantry.com`;
++      const finalName = `Usuario_${user.phoneNumber.slice(-4)}`;
++      
++      if (userDocSnap.exists()) {
++        const userData = userDocSnap.data();
++        setUserProfile({
++          name: userData.name || finalName,
++          email: phoneEmail,
++          photo: userData.photo || null,
++          familyCode: userData.familyCode || "Aún no generado"
++        });
++      } else {
++        const newProfile = {
++          name: finalName,
++          email: phoneEmail,
++          photo: null,
++          familyCode: "Aún no generado",
++          themeColor: themeColor
++        };
++        await setDoc(userDocRef, newProfile);
++        setUserProfile(newProfile);
++      }
++      
++      addHistoryLog(`Sesión iniciada con Teléfono: ${user.phoneNumber}`);
++      setShowSmsModal(false);
++      setShowAuthModal(false);
++    } catch (error) {
++      console.error("Error SMS Verification:", error);
++      customAlert("Error de Verificación", `El código ingresado es incorrecto o expiró.\n\nDetalle: ${error.message}`);
++    } finally {
++      setPhoneAuthLoading(false);
++    }
++  };
++
+   const handleLogout = async () => {
+     Alert.alert(
+       "Cerrar Sesión",
+@@ -465,13 +905,14 @@ function HomeScreenContent() {
+   };
+ 
+   const handleJoinFamilyPantry = async () => {
+-    if (!joinCodeInput.trim() || !joinCodeInput.startsWith("FAM-")) {
++    const sanitizedCode = sanitizeInput(joinCodeInput);
++    if (!sanitizedCode || !sanitizedCode.toUpperCase().startsWith("FAM-")) {
+       return Alert.alert("Código Inválido", "Por favor ingresa un código familiar válido (ej: FAM-ABCDE).");
+     }
+ 
+     checkAuthAction(async () => {
+       try {
+-        const code = joinCodeInput.trim().toUpperCase();
++        const code = sanitizedCode.toUpperCase();
+         
+         if (auth.currentUser) {
+           await updateDoc(doc(db, 'users', auth.currentUser.uid), { familyCode: code });
+@@ -561,10 +1002,11 @@ function HomeScreenContent() {
+         return;
+       }
+ 
++      
+       const detectedProducts = result.data || [];
+ 
+       if (detectedProducts.length === 0) {
+-        Alert.alert(
++        customAlert(
+           "Sin Alimentos Detectados", 
+           `No se extrajeron alimentos legibles.\n\nMotivo: "${result.confidenceReason}"`
+         );
+@@ -576,43 +1018,55 @@ function HomeScreenContent() {
+           
+         let firstScannedItem = null;
+ 
++        
+         if (isAuthenticated && pantryId) {
+           // Guardar cada producto de forma persistente en Firestore
+           for (const p of detectedProducts) {
++            const cleanName = sanitizeInput(p.name);
++            const cleanQuantity = sanitizeInput(p.quantity || "1 ud");
++            const refImg = getFoodReferenceImage(cleanName, p.category);
+             const docRef = await addFoodItem(
+               pantryId,
+-              p.name,
++              cleanName,
+               p.daysLeft || 7,
+               p.category || "Otros",
+-              p.quantity || "1 ud",
+-              base64Str
++              cleanQuantity,
++              refImg
+             );
+             
+             if (!firstScannedItem) {
+               firstScannedItem = {
+                 id: docRef.id,
+-                name: p.name,
++                name: cleanName,
++                
+                 category: p.category || "Otros",
+                 daysLeft: p.daysLeft || 7,
+-                quantity: p.quantity || "1 ud",
+-                image: base64Str,
++                quantity: cleanQuantity,
++                image: refImg,
+                 fav: false
+               };
+             }
++
+           }
+-          addHistoryLog(`Escaneó con éxito e indexó en la nube: ${detectedProducts.map(p => p.name).join(', ')}`);
++          addHistoryLog(`Escaneó con éxito e indexó en la nube: ${detectedProducts.map(p => sanitizeInput(p.name)).join(', ')}`);
+         } else {
+           // Si es un invitado, agregamos temporalmente al estado local de React
+-          const localProducts = detectedProducts.map(p => ({
+-            ...p,
+-            id: Math.random().toString(),
+-            fav: false,
+-            isLocalGuest: true,
+-            image: base64Str
+-          }));
++          const localProducts = detectedProducts.map(p => {
++            const cleanName = sanitizeInput(p.name);
++            const cleanQuantity = sanitizeInput(p.quantity || "1 ud");
++            return {
++              ...p,
++              name: cleanName,
++              quantity: cleanQuantity,
++              id: Math.random().toString(),
++              fav: false,
++              isLocalGuest: true,
++              image: getFoodReferenceImage(cleanName, p.category)
++            };
++          });
+           setProducts(prev => [...prev, ...localProducts]);
+           firstScannedItem = localProducts[0];
+-          addHistoryLog(`Escaneó como Invitado: ${detectedProducts.map(p => p.name).join(', ')}`);
++          addHistoryLog(`Escaneó como Invitado: ${detectedProducts.map(p => sanitizeInput(p.name)).join(', ')}`);
+         }
+         
+         // ABRIR AUTOMÁTICAMENTE EL MODAL DE DETALLES DEL ALIMENTO ESCANEADO (Escaneo 100% Racional)
+@@ -664,9 +1118,14 @@ function HomeScreenContent() {
+     setEditQuantity(`${nextNum} ${unit}`);
+   };
+ 
++  
++
+   const handleSaveChanges = async () => {
+     if (!selectedProduct) return;
+-    if (!editName.trim()) return Alert.alert("Error", "El nombre del alimento es obligatorio.");
++    const cleanName = sanitizeInput(editName);
++    const cleanQuantity = sanitizeInput(editQuantity);
++    
++    if (!cleanName) return customAlert("Error", "El nombre del alimento es obligatorio.");
+ 
+     if (isAuthenticated && auth.currentUser) {
+       try {
+@@ -683,15 +1142,15 @@ function HomeScreenContent() {
+         const status = editDaysLeft <= 0 ? 'expired' : (editDaysLeft <= 2 ? 'expiring_soon' : 'fresh');
+ 
+         await updateDoc(itemDoc, { 
+-          name: editName.trim(),
++          name: cleanName,
+           category: editCategory,
+-          quantity: editQuantity,
++          quantity: cleanQuantity,
+           daysLeft: editDaysLeft,
+           status: status,
+           expirationDate: Timestamp.fromDate(expDate)
+         });
+         
+-        addHistoryLog(`Editó alimento: ${editName.trim()} (${editQuantity})`);
++        addHistoryLog(`Editó alimento: ${cleanName} (${cleanQuantity})`);
+       } catch (err) {
+         console.error("Error al guardar cambios en Firestore:", err);
+         return Alert.alert("Error", "No se pudieron guardar los cambios en la nube.");
+@@ -700,12 +1159,12 @@ function HomeScreenContent() {
+       // Invitado local
+       setProducts(prev => prev.map(p => p.id === selectedProduct.id ? { 
+         ...p, 
+-        name: editName.trim(),
++        name: cleanName,
+         category: editCategory,
+-        quantity: editQuantity,
++        quantity: cleanQuantity,
+         daysLeft: editDaysLeft
+       } : p));
+-      addHistoryLog(`Editó localmente: ${editName.trim()}`);
++      addHistoryLog(`Editó localmente: ${cleanName}`);
+     }
+     
+     setShowDetailModal(false);
+@@ -821,13 +1280,17 @@ function HomeScreenContent() {
+             <Text style={[styles.cardBadgeText, { color: themeColor }]}>{item.category || "Otros"}</Text>
+           </View>
+           
+-          {item.image ? (
++          {item.image && !imageErrors[item.id] ? (
+             <Image 
+-              source={{ uri: item.image.startsWith('data:') ? item.image : `data:image/jpeg;base64,${item.image}` }} 
++              source={{ uri: item.image.startsWith('data:') || item.image.startsWith('http') ? item.image : `data:image/jpeg;base64,${item.image}` }} 
+               style={styles.cardProductImage} 
++              onError={() => {
++                setImageErrors(prev => ({ ...prev, [item.id]: true }));
++              }}
+             />
+           ) : (
+             <Ionicons 
++ 
+               name={
+                 item.category === 'Lácteos' ? "water-outline" : 
+                 item.category === 'Carnes' ? "restaurant-outline" : 
+@@ -861,11 +1324,38 @@ function HomeScreenContent() {
+     );
+   };
+ 
++  
++
+   return (
+-    <View style={[styles.safeArea, { paddingTop: insets.top }]}>
++    <View style={[
++      styles.safeArea, 
++      { paddingTop: insets.top },
++      isDesktopWeb ? {
++        maxWidth: 485,
++        width: '100%',
++        alignSelf: 'center',
++        marginHorizontal: 'auto',
++        height: windowHeight * 0.95,
++        maxHeight: 880,
++        borderRadius: 24,
++        borderWidth: 1,
++        borderColor: '#EAEFF3',
++        boxShadow: '0px 20px 40px rgba(15, 23, 42, 0.25)',
++        marginTop: windowHeight * 0.025,
++      } : {
++        width: '100%',
++        height: '100%',
++        maxWidth: undefined,
++        borderWidth: 0,
++        borderRadius: 0,
++        boxShadow: 'none',
++        marginTop: 0,
++      }
++    ]}>
+       <StatusBar barStyle="dark-content" backgroundColor="#F7F9FB" />
+       
+       <ScrollView 
++ 
+         contentContainerStyle={[styles.scrollContainer, { paddingBottom: scrollPaddingBottom }]} 
+         showsVerticalScrollIndicator={false}
+       >
+@@ -1017,19 +1507,26 @@ function HomeScreenContent() {
+             </View>
+             
+             <View style={styles.profileBox}>
+-              <TouchableOpacity onPress={changeProfilePhoto} style={styles.avatarWrapper}>
+-                {userProfile.photo ? (
++              <TouchableOpacity onPress={isProfileUpdating ? null : changeProfilePhoto} style={styles.avatarWrapper} disabled={isProfileUpdating}>
++                {isProfileUpdating ? (
++                  <View style={styles.avatarPlaceholder}>
++                    <ActivityIndicator size="large" color={themeColor} />
++                  </View>
++                ) : userProfile.photo ? (
+                   <Image source={{ uri: userProfile.photo }} style={styles.avatarImage} />
+                 ) : (
+                   <View style={styles.avatarPlaceholder}>
+-                    <Ionicons name="person" size={40} color="#999" />
+-                    <View style={[styles.avatarCameraBadge, { backgroundColor: themeColor }]}>
+-                      <Ionicons name="camera" size={14} color="#fff" />
+-                    </View>
++                    <Ionicons name="person" size={64} color="#999" />
++                  </View>
++                )}
++                {/* Indicador de cmara flotante visible siempre para denotar interactividad */}
++                {!isProfileUpdating && (
++                  <View style={[styles.avatarCameraBadge, { backgroundColor: themeColor }]}>
++                    <Ionicons name="camera" size={18} color="#fff" />
+                   </View>
+                 )}
+               </TouchableOpacity>
+-              <Text style={styles.profileNameText}>{userProfile.name}</Text>
++>
+               <Text style={styles.profileEmailText}>{userProfile.email || "Sin cuenta vinculada (Invitado)"}</Text>
+               
+               {/* Indicador de estado de autenticación */}
+@@ -1149,65 +1646,148 @@ function HomeScreenContent() {
+                   error={fieldErrors.user}
+                   onClearError={() => setFieldErrors(prev => ({ ...prev, user: null }))}
+                   autoCapitalize="words"
++                  autoComplete="name"
++                  textContentType="name"
+                 />
+               )}
+ 
+               <InputField 
+-                placeholder="Correo Electrónico" 
++                placeholder="Correo o Teléfono (ej: +573123456789)" 
+                 value={regEmail} 
+-                onChangeText={setRegEmail} 
++                onChangeText={(text) => {
++                  setRegEmail(text);
++                  if (fieldErrors.email) {
++                    setFieldErrors(prev => ({ ...prev, email: null }));
++                  }
++                }} 
+                 error={fieldErrors.email}
+                 onClearError={() => setFieldErrors(prev => ({ ...prev, email: null }))}
+-                keyboardType="email-address" 
++                keyboardType={regEmail.includes('@') ? 'email-address' : 'phone-pad'} 
+                 autoCapitalize="none"
++                autoComplete={authMode === 'register' ? 'email' : 'username'}
++                textContentType="username"
+               />
+               
+-              <View style={{ marginBottom: 14 }}>
+-                <View style={[styles.passwordContainer, fieldErrors.pass && styles.inputError]}>
+-                  <TextInput 
+-                    style={styles.passwordInput} 
+-                    placeholder="Contraseña" 
+-                    secureTextEntry={!showPassword} 
+-                    value={regPass} 
+-                    onChangeText={setRegPass} 
+-                    placeholderTextColor="#999" 
+-                  />
+-                  <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={{ paddingHorizontal: 15 }}>
+-                    <Ionicons name={showPassword ? "eye-off" : "eye"} size={22} color="#666" />
+-                  </TouchableOpacity>
+-                </View>
+-                {fieldErrors.pass && <Text style={styles.fieldErrorText}>{fieldErrors.pass}</Text>}
+-              </View>
+-
+-              {authMode === 'register' && (
+-                <View style={{ marginBottom: 14 }}>
+-                  <View style={[styles.passwordContainer, fieldErrors.confirmPass && styles.inputError]}>
+-                    <TextInput 
+-                      style={styles.passwordInput} 
+-                      placeholder="Confirmar Contraseña" 
+-                      secureTextEntry={!showPassword} 
+-                      value={regConfirmPass} 
+-                      onChangeText={setRegConfirmPass} 
+-                      placeholderTextColor="#999" 
+-                    />
++              {(regEmail.trim() === '' || regEmail.includes('@')) ? (
++                <>
++                  {authMode === 'register' && (
++                    <View style={styles.compactStrengthContainer}>
++                      <View style={styles.strengthHeader}>
++                        <Text style={styles.strengthLabel}>Seguridad de la Contraseña:</Text>
++                        <Text style={[styles.strengthText, { color: getStrengthColor(getPasswordStrength(regPass)) }]}>
++                          {getStrengthText(getPasswordStrength(regPass))}
++                        </Text>
++                      </View>
++                      <View style={styles.strengthBarBg}>
++                        <View style={[styles.strengthBarFill, { 
++                          width: `${(getPasswordStrength(regPass) / 5) * 100}%`, 
++                          backgroundColor: getStrengthColor(getPasswordStrength(regPass)) 
++                        }]} />
++                      </View>
++                    </View>
++                  )}
++
++                  <View style={{ marginBottom: 14 }}>
++                    <View style={[styles.passwordContainer, fieldErrors.pass && styles.inputError]}>
++                      <TextInput 
++                        style={styles.passwordInput} 
++                        placeholder="Contraseña" 
++                        secureTextEntry={!showPassword} 
++                        value={regPass} 
++                        onChangeText={(text) => {
++                          setRegPass(text);
++                          if (fieldErrors.pass) {
++                            setFieldErrors(prev => ({ ...prev, pass: null }));
++                          }
++                        }} 
++                        placeholderTextColor="#999" 
++                        autoComplete={authMode === 'register' ? 'new-password' : 'current-password'}
++                        textContentType={authMode === 'register' ? 'newPassword' : 'password'}
++                      />
++                      <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={{ paddingHorizontal: 15 }}>
++                        <Ionicons name={showPassword ? "eye-off" : "eye"} size={22} color="#666" />
++                      </TouchableOpacity>
++                    </View>
++                    {fieldErrors.pass && <Text style={styles.fieldErrorText}>{fieldErrors.pass}</Text>}
+                   </View>
+-                  {fieldErrors.confirmPass && <Text style={styles.fieldErrorText}>{fieldErrors.confirmPass}</Text>}
++
++                  {authMode === 'register' && (
++                    <View style={{ marginBottom: 14 }}>
++                      <View style={[styles.passwordContainer, fieldErrors.confirmPass && styles.inputError]}>
++                        <TextInput 
++                          style={styles.passwordInput} 
++                          placeholder="Confirmar Contraseña" 
++                          secureTextEntry={!showPassword} 
++                          value={regConfirmPass} 
++                          onChangeText={setRegConfirmPass} 
++                          placeholderTextColor="#999" 
++                          autoComplete="new-password"
++                          textContentType="newPassword"
++                        />
++                      </View>
++                      {fieldErrors.confirmPass && <Text style={styles.fieldErrorText}>{fieldErrors.confirmPass}</Text>}
++                    </View>
++                  )}
++                </>
++              ) : (
++                /* Ayuda visual indicando que se iniciará sesión/registrará vía SMS OTP */
++                <View style={styles.phoneModeHintContainer}>
++                  <Ionicons name="phone-portrait-outline" size={18} color={themeColor} />
++                  <Text style={[styles.phoneModeHintText, { color: themeColor }]}>
++                    {authMode === 'register' 
++                      ? 'Acceso Telefónico Rápido: Te enviaremos un SMS para registrarte y verificar tu cuenta sin contraseña.'
++                      : 'Acceso por Teléfono Rápido: Te enviaremos un código SMS para iniciar sesión sin contraseña.'}
++                  </Text>
+                 </View>
+               )}
+ 
++              {/* Contenedor invisible requerido por Firebase reCAPTCHA en Web */}
++              {Platform.OS === 'web' && !regEmail.includes('@') && regEmail.trim() !== '' && (
++                <View id="recaptcha-container" style={{ marginVertical: 8, height: 1 }} />
++              )}
++
+               <TouchableOpacity 
+-                style={[styles.actionBtn, { backgroundColor: themeColor, opacity: authLoading ? 0.7 : 1 }]} 
+-                onPress={authMode === 'register' ? handleRegister : handleLogin}
+-                disabled={authLoading}
++                style={[styles.actionBtn, { backgroundColor: themeColor, opacity: authLoading || phoneAuthLoading ? 0.7 : 1 }]} 
++                onPress={
++                  (regEmail.trim() !== '' && !regEmail.includes('@'))
++                    ? handleSendSms
++                    : (authMode === 'register' ? handleRegister : handleLogin)
++                }
++                disabled={authLoading || phoneAuthLoading}
+               >
+-                {authLoading ? (
++                {authLoading || phoneAuthLoading ? (
+                   <ActivityIndicator color="#fff" size="small" />
+                 ) : (
+                   <Text style={styles.actionBtnText}>
+-                    {authMode === 'register' ? 'Crear mi Cuenta' : 'Iniciar Sesión'}
++                    {(regEmail.trim() !== '' && !regEmail.includes('@'))
++                      ? (authMode === 'register' ? 'Registrarse con SMS' : 'Enviar Código SMS')
++                      : (authMode === 'register' ? 'Crear mi Cuenta' : 'Iniciar Sesión')}
+                   </Text>
+                 )}
+               </TouchableOpacity>
++
++              {/* Opciones de Redes Sociales (Google & Facebook) colocadas exactamente debajo */}
++              <View style={styles.socialDividerRow}>
++                <View style={styles.socialDividerLine} />
++                <Text style={styles.socialDividerText}>o ingresa con</Text>
++                <View style={styles.socialDividerLine} />
++              </View>
++
++              <View style={styles.socialButtonsRow}>
++                <TouchableOpacity style={styles.socialBtnGoogle} onPress={handleGoogleLogin}>
++                  <Image 
++                    source={{ uri: 'https://www.google.com/images/branding/googleg/1x/googleg_standard_color_128dp.png' }} 
++                    style={{ width: 18, height: 18, marginRight: 8 }} 
++                    resizeMode="contain"
++                  />
++                  <Text style={styles.socialBtnGoogleText}>Google</Text>
++                </TouchableOpacity>
++
++                <TouchableOpacity style={styles.socialBtnFacebook} onPress={handleFacebookLogin}>
++                  <Ionicons name="logo-facebook" size={18} color="#ffffff" style={{ marginRight: 8 }} />
++                  <Text style={styles.socialBtnFacebookText}>Facebook</Text>
++                </TouchableOpacity>
++              </View>
+               
+               <TouchableOpacity style={{ marginTop: 20 }} onPress={() => { resetAuthFields(); setShowAuthModal(false); }}>
+                 <Text style={{ color: '#888', textAlign: 'center', fontWeight: '600', fontSize: 14 }}>Cancelar</Text>
+@@ -1217,6 +1797,47 @@ function HomeScreenContent() {
+         </KeyboardAvoidingView>
+       </Modal>
+ 
++      {/* --- MODAL PARA CONFIRMAR SMS OTP (TELÉFONO) --- */}
++      <Modal visible={showSmsModal} animationType="slide" transparent={true} onRequestClose={() => setShowSmsModal(false)}>
++        <TouchableOpacity 
++          style={styles.modalOverlay} 
++          activeOpacity={1} 
++          onPress={() => setShowSmsModal(false)}
++        >
++          <TouchableWithoutFeedback>
++            <View style={styles.modalContent}>
++              <View style={styles.modalHandle} />
++              <Text style={styles.modalTitle}>Verificación de Teléfono</Text>
++              <Text style={styles.modalSubtitle}>Hemos enviado un código SMS de 6 dígitos a {phoneInput}</Text>
++              
++              <InputField 
++                placeholder="Código de 6 dígitos (OTP)" 
++                value={smsCodeInput} 
++                onChangeText={setSmsCodeInput}
++                keyboardType="number-pad" 
++                maxLength={6}
++              />
++
++              <TouchableOpacity 
++                style={[styles.actionBtn, { backgroundColor: themeColor, opacity: phoneAuthLoading ? 0.7 : 1, marginTop: 10 }]} 
++                onPress={handleVerifySmsCode}
++                disabled={phoneAuthLoading}
++              >
++                {phoneAuthLoading ? (
++                  <ActivityIndicator color="#fff" size="small" />
++                ) : (
++                  <Text style={styles.actionBtnText}>Confirmar Código</Text>
++                )}
++              </TouchableOpacity>
++
++              <TouchableOpacity style={{ marginTop: 20 }} onPress={() => setShowSmsModal(false)}>
++                <Text style={{ color: '#888', textAlign: 'center', fontWeight: '600' }}>Atrás</Text>
++              </TouchableOpacity>
++            </View>
++          </TouchableWithoutFeedback>
++        </TouchableOpacity>
++      </Modal>
++
+       {/* --- MODAL DEL ESCÁNER PERSONALIZADO --- */}
+       <Modal visible={showScanner} animationType="slide" onRequestClose={() => setShowScanner(false)}>
+         <ScannerScreen 
+@@ -1243,13 +1864,34 @@ function HomeScreenContent() {
+                     Categoría: {editCategory}
+                   </Text>
+                 </View>
+-
+                 {/* Imagen del Alimento Escaneado */}
+-                {selectedProduct.image && (
++                {selectedProduct.image && !imageErrors[selectedProduct.id] ? (
+                   <View style={styles.detailImageContainer}>
+                     <Image 
+-                      source={{ uri: selectedProduct.image.startsWith('data:') ? selectedProduct.image : `data:image/jpeg;base64,${selectedProduct.image}` }} 
++                      source={{ uri: selectedProduct.image.startsWith('data:') || selectedProduct.image.startsWith('http') ? selectedProduct.image : `data:image/jpeg;base64,${selectedProduct.image}` }} 
+                       style={styles.detailProductImage} 
++                      onError={() => {
++                        setImageErrors(prev => ({ ...prev, [selectedProduct.id]: true }));
++                      }}
++                    />
++                  </View>
++                ) : (
++                  <View style={[styles.detailImageContainer, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#F8FAFC' }]}>
++                    <Ionicons 
++                      name={
++                        selectedProduct.category === 'Lcteos' ? "water-outline" : 
++                        selectedProduct.category === 'Carnes' ? "restaurant-outline" : 
++                        selectedProduct.category === 'Frutas' || selectedProduct.category === 'Verduras' ? "leaf-outline" : 
++                        selectedProduct.category === 'Protenas' ? "egg-outline" :
++                        selectedProduct.category === 'Enlatados' ? "archive-outline" :
++                        selectedProduct.category === 'Pastas' ? "restaurant-outline" :
++                        selectedProduct.category === 'Bebidas' ? "cafe-outline" :
++                        selectedProduct.category === 'Panadera' ? "nutrition-outline" :
++                        selectedProduct.category === 'Granos' ? "nutrition-outline" :
++                        "cube-outline"
++                      } 
++                      size={64} 
++                      color="#bbbbbb" 
+                     />
+                   </View>
+                 )}
+@@ -1392,6 +2034,100 @@ function HomeScreenContent() {
+           <Text style={[styles.navText, activeTab === 'perfil' && { color: themeColor, fontWeight: '700' }]}>Perfil</Text>
+         </TouchableOpacity>
+       </View>
++
++      {/* --- MODAL DE ALERTA PERSONALIZADO TIPO MVIL PREMIUM --- */}
++      {customAlertState.visible && (
++        <View style={styles.customAlertOverlay}>
++          <View style={styles.customAlertCard}>
++            {/* Cabecera decorativa */}
++            <View style={[styles.customAlertHeaderBar, { backgroundColor: themeColor }]} />
++            
++            <View style={styles.customAlertContent}>
++              <View style={[styles.customAlertIconContainer, { backgroundColor: `${themeColor}15` }]}>
++                <Ionicons 
++                  name={
++                    customAlertState.type === 'confirm' 
++                      ? "help-circle" 
++                      : customAlertState.type === 'actions' 
++                        ? "options" 
++                        : customAlertState.title.toLowerCase().includes('error') || customAlertState.title.toLowerCase().includes('denegado')
++                          ? "alert-circle"
++                          : "checkmark-circle"
++                  } 
++                  size={36} 
++                  color={
++                    customAlertState.title.toLowerCase().includes('error') || customAlertState.title.toLowerCase().includes('denegado')
++                      ? "#EF4444"
++                      : themeColor
++                  } 
++                />
++              </View>
++              
++              <Text style={styles.customAlertTitle}>{customAlertState.title}</Text>
++              {customAlertState.message ? (
++                <Text style={styles.customAlertMessage}>{customAlertState.message}</Text>
++              ) : null}
++              
++              {/* Botones / Acciones */}
++              {customAlertState.type === 'actions' ? (
++                <View style={styles.customAlertActionsWrapper}>
++                  {customAlertState.actions.map((act, index) => {
++                    if (act.text === 'Cancelar' || act.style === 'cancel') return null;
++                    return (
++                      <TouchableOpacity 
++                        key={index} 
++                        style={[styles.customAlertActionBtn, { borderColor: `${themeColor}30` }]}
++                        onPress={() => {
++                          setCustomAlertState(prev => ({ ...prev, visible: false }));
++                          if (act.onPress) act.onPress();
++                        }}
++                      >
++                        <Text style={[styles.customAlertActionBtnText, { color: themeColor }]}>{act.text}</Text>
++                        <Ionicons name="chevron-forward" size={16} color={themeColor} />
++                      </TouchableOpacity>
++                    );
++                  })}
++                  <TouchableOpacity 
++                    style={styles.customAlertCancelBtnStacked}
++                    onPress={() => setCustomAlertState(prev => ({ ...prev, visible: false }))}
++                  >
++                    <Text style={styles.customAlertCancelBtnStackedText}>Cancelar</Text>
++                  </TouchableOpacity>
++                </View>
++              ) : customAlertState.type === 'confirm' ? (
++                <View style={styles.customAlertButtonsRow}>
++                  <TouchableOpacity 
++                    style={styles.customAlertCancelBtn}
++                    onPress={customAlertState.onCancel}
++                  >
++                    <Text style={styles.customAlertCancelBtnText}>{customAlertState.cancelText || 'Cancelar'}</Text>
++                  </TouchableOpacity>
++                  <TouchableOpacity 
++                    style={[
++                      styles.customAlertConfirmBtn, 
++                      { 
++                        backgroundColor: customAlertState.confirmText.toLowerCase().includes('eliminar') || customAlertState.confirmText.toLowerCase().includes('cerrar') 
++                          ? '#EF4444' 
++                          : themeColor 
++                      }
++                    ]}
++                    onPress={customAlertState.onConfirm}
++                  >
++                    <Text style={styles.customAlertConfirmBtnText}>{customAlertState.confirmText || 'Confirmar'}</Text>
++                  </TouchableOpacity>
++                </View>
++              ) : (
++                <TouchableOpacity 
++                  style={[styles.customAlertSingleBtn, { backgroundColor: themeColor }]}
++                  onPress={customAlertState.onConfirm}
++                >
++                  <Text style={styles.customAlertSingleBtnText}>{customAlertState.confirmText || 'Aceptar'}</Text>
++                </TouchableOpacity>
++              )}
++            </View>
++          </View>
++        </View>
++      )}
+     </View>
+   );
+ }
+@@ -1417,6 +2153,37 @@ const styles = StyleSheet.create({
+     flex: 1, 
+     backgroundColor: '#F7F9FB',
+   },
++  compactStrengthContainer: {
++    marginBottom: 10,
++    marginTop: 2,
++    width: '100%',
++  },
++  strengthHeader: {
++    flexDirection: 'row',
++    justifyContent: 'space-between',
++    alignItems: 'center',
++    marginBottom: 5,
++  },
++  strengthLabel: {
++    fontSize: 12,
++    fontWeight: '700',
++    color: '#64748B',
++  },
++  strengthText: {
++    fontSize: 12,
++    fontWeight: '800',
++  },
++  strengthBarBg: {
++    height: 6,
++    backgroundColor: '#E2E8F0',
++    borderRadius: 3,
++    width: '100%',
++    overflow: 'hidden',
++  },
++  strengthBarFill: {
++    height: '100%',
++    borderRadius: 3,
++  },
+   scrollContainer: { 
+     // paddingBottom se calcula dinámicamente con insets
+   },
+@@ -1455,9 +2222,11 @@ const styles = StyleSheet.create({
+     flexDirection: 'row', alignItems: 'center', backgroundColor: '#ffffff', 
+     marginHorizontal: 20, paddingHorizontal: 16, paddingVertical: 14, borderRadius: 16, marginBottom: 22,
+     borderWidth: 1, borderColor: '#EAEFF3', elevation: 2,
++    
+     shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 6, shadowOffset: { width: 0, height: 3 },
+   },
+   searchText: { color: '#9CA3AF', marginLeft: 12, fontSize: 14, fontWeight: '600' },
++  searchInput: { flex: 1, color: '#1A1C1E', marginLeft: 12, fontSize: 14, fontWeight: '600', padding: 0, ...Platform.select({ web: { outlineStyle: 'none' }, default: {} }) },
+   categoriesContainer: { paddingLeft: 20, marginBottom: 24, flexGrow: 0 },
+   categoryItem: { alignItems: 'center', marginRight: 20 },
+   categoryIcon: { 
+@@ -1527,17 +2296,23 @@ const styles = StyleSheet.create({
+   historyTime: { color: '#9CA3AF', fontSize: 12, marginTop: 5, fontWeight: '500' },
+ 
+   // Perfil
++  
+   profileBox: { alignItems: 'center', marginVertical: 24 },
+   avatarWrapper: { position: 'relative' },
+   avatarPlaceholder: { 
+-    width: 100, height: 100, borderRadius: 50, backgroundColor: '#EAEFF3', 
+-    justifyContent: 'center', alignItems: 'center', borderWidth: 3, borderColor: '#ffffff', elevation: 3,
++    width: 160, height: 160, borderRadius: 80, backgroundColor: '#EAEFF3', 
++    justifyContent: 'center', alignItems: 'center', borderWidth: 4, borderColor: '#ffffff', elevation: 3,
++    shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.1, shadowRadius: 5,
+   },
+   avatarCameraBadge: {
+-    position: 'absolute', bottom: 0, right: 0, width: 28, height: 28, borderRadius: 14, 
+-    justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#ffffff',
++    position: 'absolute', bottom: 4, right: 4, width: 38, height: 38, borderRadius: 19, 
++    justifyContent: 'center', alignItems: 'center', borderWidth: 2.5, borderColor: '#ffffff',
++    elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.15, shadowRadius: 3,
++  },
++  avatarImage: { 
++    width: 160, height: 160, borderRadius: 80, borderWidth: 4, borderColor: '#ffffff', elevation: 4,
++    shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 6,
+   },
+-  avatarImage: { width: 100, height: 100, borderRadius: 50, borderWidth: 3, borderColor: '#ffffff', elevation: 4 },
+   profileNameText: { fontSize: 22, fontWeight: '800', color: '#1A1C1E', marginTop: 12, letterSpacing: -0.3 },
+   profileEmailText: { fontSize: 13, color: '#6B7280', marginTop: 3, fontWeight: '500' },
+   authStatusBadge: {
+@@ -1692,8 +2467,505 @@ const styles = StyleSheet.create({
+   navCenterWrapper: { flex: 1, alignItems: 'center', justifyContent: 'center', position: 'relative' },
+   navText: { fontSize: 10, color: '#9CA3AF', marginTop: 5, fontWeight: '600' },
+   
++  
+   fabCamera: { 
+     width: 62, height: 62, borderRadius: 31, justifyContent: 'center', alignItems: 'center', 
+     position: 'absolute', bottom: 8, elevation: 8, shadowOpacity: 0.3, shadowRadius: 6, shadowOffset: { width: 0, height: 4 }
++  },
++
++  // ESTILOS DEL CONTROLADOR DE COLOR DINMICO (HSV COLOR PICKER)
++  colorPickerCard: {
++    backgroundColor: '#F1F3F5',
++    borderRadius: 16,
++    borderWidth: 1.5,
++    borderColor: '#D1D5DB',
++    padding: 16,
++    marginTop: 8,
++    marginBottom: 20,
++    elevation: 3,
++    shadowColor: '#000',
++    shadowOffset: { width: 0, height: 2 },
++    shadowOpacity: 0.1,
++    shadowRadius: 4,
++  },
++  eyedropperCard: {
++    width: 68,
++    height: 68,
++    borderRadius: 14,
++    backgroundColor: '#ffffff',
++    alignItems: 'center',
++    justifyContent: 'center',
++    borderWidth: 1.5,
++    borderColor: '#D1D5DB',
++    elevation: 2,
++    shadowColor: '#000',
++    shadowOffset: { width: 0, height: 3 },
++    shadowOpacity: 0.08,
++    shadowRadius: 4,
++  },
++  spectrumCanvas: {
++    width: 200,
++    height: 150,
++    borderRadius: 8,
++    borderWidth: 1.5,
++    borderColor: '#B0BEC5',
++    position: 'relative',
++    overflow: 'hidden',
++  },
++  canvasCursor: {
++    position: 'absolute',
++    width: 18,
++    height: 18,
++    borderRadius: 9,
++    borderWidth: 2.5,
++    borderColor: '#455A64',
++    shadowColor: '#000',
++    shadowOffset: { width: 0, height: 1 },
++    shadowOpacity: 0.3,
++    shadowRadius: 1.5,
++    elevation: 2,
++  },
++  hueSliderContainer: {
++    width: 20,
++    height: 150,
++    borderRadius: 10,
++    borderWidth: 1.5,
++    borderColor: '#B0BEC5',
++    position: 'relative',
++  },
++  hueSliderCursor: {
++    position: 'absolute',
++    left: -2,
++    width: 24,
++    height: 16,
++    borderRadius: 8,
++    borderWidth: 2.5,
++    borderColor: '#1A1C1E',
++    shadowColor: '#000',
++    shadowOffset: { width: 0, height: 1 },
++    shadowOpacity: 0.3,
++    shadowRadius: 1.5,
++    elevation: 2,
++  },
++  rgbLabel: {
++    fontSize: 14,
++    fontWeight: '800',
++    color: '#374151',
++  },
++  rgbValueBox: {
++    backgroundColor: '#E5E7EB',
++    borderWidth: 1,
++    borderColor: '#CFD8DC',
++    borderRadius: 6,
++    paddingHorizontal: 8,
++    paddingVertical: 4,
++    minWidth: 40,
++    alignItems: 'center',
++  },
++  rgbValueText: {
++    fontSize: 13,
++    fontWeight: '700',
++    color: '#374151',
++  },
++  rvaBtn: {
++    backgroundColor: '#ffffff',
++    borderRadius: 8,
++    borderWidth: 1.5,
++    borderColor: '#CFD8DC',
++    paddingHorizontal: 16,
++    paddingVertical: 8,
++    elevation: 1,
++    shadowColor: '#000',
++    shadowOffset: { width: 0, height: 1 },
++    shadowOpacity: 0.05,
++    shadowRadius: 2,
++  },
++  rvaBtnText: {
++    fontSize: 13,
++    fontWeight: '800',
++    color: '#4B5563',
++  },
++  myColorsBannerContainer: {
++    backgroundColor: '#CFD8DC',
++    borderRadius: 12,
++    borderWidth: 1,
++    borderColor: '#B0BEC5',
++    overflow: 'hidden',
++    marginTop: 8,
++  },
++  myColorsBannerHeader: {
++    backgroundColor: '#B0BEC5',
++    paddingHorizontal: 12,
++    paddingVertical: 8,
++    alignItems: 'center',
++  },
++  myColorsBannerHeaderText: {
++    fontSize: 12,
++    fontWeight: '800',
++    color: '#374151',
++    textTransform: 'uppercase',
++    letterSpacing: 0.5,
++  },
++  myColorsBannerBody: {
++    padding: 12,
++    backgroundColor: '#ECEFF1',
++  },
++  addColorsCurrentBtn: {
++    width: 28,
++    height: 28,
++    borderRadius: 8,
++    backgroundColor: '#CFD8DC',
++    alignItems: 'center',
++    justifyContent: 'center',
++    borderWidth: 1.5,
++    borderColor: '#B0BEC5',
++  },
++  guestWarningBanner: {
++    marginHorizontal: 20,
++    marginBottom: 20,
++    borderRadius: 16,
++    borderWidth: 1.5,
++    padding: 16,
++    flexDirection: 'row',
++    alignItems: 'center',
++    elevation: 1,
++    shadowColor: '#000',
++    shadowOpacity: 0.03,
++    shadowRadius: 5,
++    shadowOffset: { width: 0, height: 2 },
++  },
++  guestWarningTitle: {
++    fontSize: 14,
++    fontWeight: '800',
++    marginBottom: 4,
++  },
++  guestWarningText: {
++    fontSize: 11,
++    color: '#6B7280',
++    lineHeight: 16,
++    fontWeight: '500',
++  },
++  familyCodeLockedContainer: {
++    borderRadius: 16,
++    borderWidth: 1.5,
++    padding: 18,
++    flexDirection: 'row',
++    alignItems: 'center',
++    justifyContent: 'center',
++    gap: 12,
++    marginTop: 6,
++    marginBottom: 16,
++  },
++  familyCodeLockedText: {
++    fontSize: 13,
++    fontWeight: '700',
++    textAlign: 'center',
++  },
++  infoCardContainer: {
++    borderWidth: 1.5,
++    borderRadius: 16,
++    padding: 14,
++    backgroundColor: '#F8FAFC',
++    marginBottom: 16,
++  },
++  infoCardTitle: {
++    fontSize: 13,
++    fontWeight: '800',
++    marginBottom: 10,
++    flexDirection: 'row',
++    alignItems: 'center',
++    gap: 6,
++  },
++  infoCardGrid: {
++    gap: 8,
++  },
++  infoCardRow: {
++    flexDirection: 'row',
++    alignItems: 'center',
++    gap: 8,
++  },
++  infoCardLabel: {
++    fontSize: 12,
++    fontWeight: '700',
++    color: '#4B5563',
++    width: 90,
++  },
++  infoCardValue: {
++    fontSize: 12,
++    fontWeight: '600',
++    color: '#1F2937',
++    flex: 1,
++  },
++  
++  // Social Login & OTP Styles
++  socialDividerRow: {
++    flexDirection: 'row',
++    alignItems: 'center',
++    marginVertical: 18,
++    width: '100%',
++    justifyContent: 'center',
++  },
++  socialDividerLine: {
++    flex: 1,
++    height: 1,
++    backgroundColor: '#E2E8F0',
++  },
++  socialDividerText: {
++    fontSize: 12,
++    color: '#64748B',
++    marginHorizontal: 12,
++    fontWeight: '600',
++  },
++  socialButtonsRow: {
++    flexDirection: 'row',
++    justifyContent: 'space-between',
++    width: '100%',
++    gap: 12,
++    marginBottom: 8,
++  },
++  socialBtn: {
++    flex: 1,
++    flexDirection: 'row',
++    alignItems: 'center',
++    justifyContent: 'center',
++    backgroundColor: '#ffffff',
++    borderWidth: 1,
++    borderColor: '#E2E8F0',
++    paddingVertical: 12,
++    borderRadius: 14,
++    elevation: 1,
++    shadowColor: '#000',
++    shadowOpacity: 0.05,
++    shadowRadius: 3,
++    shadowOffset: { width: 0, height: 1 },
++  },
++  socialBtnText: {
++    fontSize: 14,
++    color: '#334155',
++    fontWeight: '700',
++  },
++  outlineBtn: {
++    width: '100%',
++    borderColor: '#EF5350',
++    borderWidth: 1.5,
++    borderRadius: 14,
++    paddingVertical: 14,
++    alignItems: 'center',
++    justifyContent: 'center',
++  },
++  
++  // Estilos de Alertas Personalizadas (Mobile-First Premium)
++  customAlertOverlay: {
++    position: 'absolute',
++    top: 0,
++    left: 0,
++    right: 0,
++    bottom: 0,
++    backgroundColor: 'rgba(15, 23, 42, 0.75)',
++    zIndex: 99999,
++    justifyContent: 'center',
++    alignItems: 'center',
++    padding: 20,
++    ...Platform.select({
++      web: {
++        backdropFilter: 'blur(8px)',
++      },
++      default: {}
++    })
++  },
++  customAlertCard: {
++    width: '100%',
++    maxWidth: 320,
++    backgroundColor: '#ffffff',
++    borderRadius: 24,
++    overflow: 'hidden',
++    elevation: 24,
++    shadowColor: '#0F172A',
++    shadowOpacity: 0.25,
++    shadowRadius: 20,
++    shadowOffset: { width: 0, height: 12 },
++  },
++  customAlertHeaderBar: {
++    height: 6,
++    width: '100%',
++  },
++  customAlertContent: {
++    padding: 24,
++    alignItems: 'center',
++  },
++  customAlertIconContainer: {
++    width: 68,
++    height: 68,
++    borderRadius: 34,
++    justifyContent: 'center',
++    alignItems: 'center',
++    marginBottom: 18,
++  },
++  customAlertTitle: {
++    fontSize: 18,
++    fontWeight: '800',
++    color: '#0F172A',
++    textAlign: 'center',
++    marginBottom: 8,
++    lineHeight: 24,
++  },
++  customAlertMessage: {
++    fontSize: 13.5,
++    color: '#64748B',
++    textAlign: 'center',
++    lineHeight: 19,
++    marginBottom: 24,
++    fontWeight: '500',
++  },
++  customAlertSingleBtn: {
++    width: '100%',
++    paddingVertical: 14,
++    borderRadius: 14,
++    alignItems: 'center',
++    justifyContent: 'center',
++    elevation: 2,
++    shadowColor: '#000',
++    shadowOpacity: 0.1,
++    shadowRadius: 4,
++    shadowOffset: { width: 0, height: 2 },
++  },
++  customAlertSingleBtnText: {
++    color: '#ffffff',
++    fontSize: 14.5,
++    fontWeight: '700',
++  },
++  customAlertButtonsRow: {
++    flexDirection: 'row',
++    width: '100%',
++    gap: 12,
++  },
++  customAlertCancelBtn: {
++    flex: 1,
++    paddingVertical: 14,
++    borderRadius: 14,
++    backgroundColor: '#F1F5F9',
++    alignItems: 'center',
++    justifyContent: 'center',
++  },
++  customAlertCancelBtnText: {
++    color: '#64748B',
++    fontSize: 14,
++    fontWeight: '700',
++  },
++  customAlertConfirmBtn: {
++    flex: 1,
++    paddingVertical: 14,
++    borderRadius: 14,
++    alignItems: 'center',
++    justifyContent: 'center',
++    elevation: 2,
++    shadowColor: '#000',
++    shadowOpacity: 0.1,
++    shadowRadius: 4,
++    shadowOffset: { width: 0, height: 2 },
++  },
++  customAlertConfirmBtnText: {
++    color: '#ffffff',
++    fontSize: 14,
++    fontWeight: '700',
++  },
++  customAlertActionsWrapper: {
++    width: '100%',
++    gap: 10,
++  },
++  customAlertActionBtn: {
++    width: '100%',
++    flexDirection: 'row',
++    alignItems: 'center',
++    justifyContent: 'space-between',
++    paddingVertical: 15,
++    paddingHorizontal: 16,
++    borderRadius: 14,
++    backgroundColor: '#ffffff',
++    borderWidth: 1,
++  },
++  customAlertActionBtnText: {
++    fontSize: 14,
++    fontWeight: '700',
++  },
++  customAlertCancelBtnStacked: {
++    width: '100%',
++    paddingVertical: 14,
++    borderRadius: 14,
++    backgroundColor: '#F1F5F9',
++    alignItems: 'center',
++    justifyContent: 'center',
++    marginTop: 6,
++  },
++  customAlertCancelBtnStackedText: {
++    color: '#64748B',
++    fontSize: 14,
++    fontWeight: '700',
++  },
++
++  // Estilos adicionales de Auth Optimizado
++  phoneModeHintContainer: {
++    flexDirection: 'row',
++    alignItems: 'center',
++    gap: 8,
++    backgroundColor: '#F8FAFC',
++    borderWidth: 1,
++    borderColor: '#E2E8F0',
++    padding: 12,
++    borderRadius: 12,
++    marginBottom: 16,
++    marginTop: 4,
++  },
++  phoneModeHintText: {
++    fontSize: 12,
++    lineHeight: 18,
++    fontWeight: '600',
++    flex: 1,
++  },
++  switchAuthText: {
++    fontSize: 13.5,
++    fontWeight: '700',
++    textAlign: 'center',
++    textDecorationLine: 'underline',
++  },
++  socialBtnGoogle: {
++    flex: 1,
++    flexDirection: 'row',
++    alignItems: 'center',
++    justifyContent: 'center',
++    backgroundColor: '#ffffff',
++    borderWidth: 1,
++    borderColor: '#D1D5DB',
++    paddingVertical: 12,
++    borderRadius: 14,
++    elevation: 1.5,
++    shadowColor: '#000',
++    shadowOpacity: 0.06,
++    shadowRadius: 3,
++    shadowOffset: { width: 0, height: 1.5 },
++  },
++  socialBtnGoogleText: {
++    fontSize: 14,
++    color: '#374151',
++    fontWeight: '700',
++  },
++  socialBtnFacebook: {
++    flex: 1,
++    flexDirection: 'row',
++    alignItems: 'center',
++    justifyContent: 'center',
++    backgroundColor: '#1877F2',
++    paddingVertical: 12,
++    borderRadius: 14,
++    elevation: 1.5,
++    shadowColor: '#000',
++    shadowOpacity: 0.06,
++    shadowRadius: 3,
++    shadowOffset: { width: 0, height: 1.5 },
++  },
++  socialBtnFacebookText: {
++    fontSize: 14,
++    color: '#ffffff',
++    fontWeight: '700',
+   }
+-});
+\ No newline at end of file
++});
