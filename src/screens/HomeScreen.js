@@ -28599,6 +28599,7 @@ function HomeScreenContent() {
 
 
   const [authMode, setAuthMode] = useState('login'); // 'register' o 'login'
+  const [searchQuery, setSearchQuery] = useState('');
 
 
 
@@ -192805,7 +192806,7 @@ function HomeScreenContent() {
 
 
 
-  const filteredProducts = activeCategory === 'Para Ti' 
+  const categoryProducts = activeCategory === 'Para Ti' ? products : products.filter(p => p.category && p.category.toLowerCase().includes(activeCategory.toLowerCase()));
 
 
 
@@ -192933,7 +192934,7 @@ function HomeScreenContent() {
 
 
 
-    ? products 
+  const filteredProducts = categoryProducts.filter(p => !searchQuery.trim() || (p.name && p.name.toLowerCase().includes(searchQuery.toLowerCase())));
 
 
 
@@ -193061,7 +193062,7 @@ function HomeScreenContent() {
 
 
 
-    : products.filter(p => p.category && p.category.toLowerCase().includes(activeCategory.toLowerCase()));
+
 
 
 
@@ -212806,7 +212807,18 @@ function HomeScreenContent() {
 
 
 
-              <Text style={[styles.searchText, { color: textSecondary }]}>Buscar en la despensa inteligente...</Text>
+              <TextInput 
+                style={[styles.searchText, { color: textPrimary, flex: 1, paddingVertical: 8, outlineStyle: 'none' }]} 
+                placeholder="Buscar en la despensa inteligente..." 
+                placeholderTextColor={textSecondary} 
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+              />
+              {searchQuery.trim() !== '' && (
+                <TouchableOpacity onPress={() => setSearchQuery('')} style={{ paddingHorizontal: 8 }}>
+                  <Ionicons name="close-circle" size={18} color="#999" />
+                </TouchableOpacity>
+              )}
 
 
 
