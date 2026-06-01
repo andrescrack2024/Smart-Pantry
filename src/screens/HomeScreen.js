@@ -105539,7 +105539,7 @@ function HomeScreenContent() {
 
 
 
-      const msg = error.code === 'auth/operation-not-allowed'
+      let msg = `Detalle: ${error.code} - ${error.message}`;
 
 
 
@@ -105667,7 +105667,15 @@ function HomeScreenContent() {
 
 
 
-        ? "El proveedor de Google no está habilitado en tu consola de Firebase. Ve a Authentication -> Sign-in method y actívalo."
+      if (error.code === 'auth/operation-not-allowed') {
+        msg = "El proveedor de Google no está habilitado en tu consola de Firebase. Ve a Authentication -> Sign-in method y actívalo.";
+      } else if (error.code === 'auth/unauthorized-domain') {
+        msg = "Este dominio no está autorizado en tu proyecto de Firebase. Por favor, ve a la Consola de Firebase -> Authentication -> Ajustes (Settings) -> Dominios Autorizados y agrega 'smart-pantry-app-097i.onrender.com' a la lista para habilitar el inicio de sesión.";
+      } else if (error.code === 'auth/popup-blocked') {
+        msg = "El navegador bloqueó la ventana emergente de inicio de sesión con Google. Por favor, permite las ventanas emergentes para este sitio.";
+      } else if (error.code === 'auth/popup-closed-by-user') {
+        msg = "Cerraste la ventana de Google antes de completar la autenticación. Por favor, inténtalo de nuevo.";
+      }
 
 
 
@@ -105795,7 +105803,7 @@ function HomeScreenContent() {
 
 
 
-        : `Detalle: ${error.code} - ${error.message}`;
+
 
 
 
@@ -204174,6 +204182,7 @@ function HomeScreenContent() {
 
 
   const bgInput = isDark ? '#2A2A2A' : '#F3F4F6';
+  const isPhoneMode = regEmail.trim() !== '' && /\+?[0-9\s-()]+$/.test(regEmail.trim());
 
 
 
@@ -253929,7 +253938,7 @@ function HomeScreenContent() {
 
 
 
-                keyboardType={regEmail.includes('@') ? 'email-address' : 'phone-pad'} 
+                keyboardType={isPhoneMode ? 'phone-pad' : 'email-address'} 
 
 
 
@@ -254697,7 +254706,7 @@ function HomeScreenContent() {
 
 
 
-              {(regEmail.trim() === '' || regEmail.includes('@')) ? (
+              {(!isPhoneMode) ? (
 
 
 
@@ -264169,7 +264178,7 @@ function HomeScreenContent() {
 
 
 
-              {Platform.OS === 'web' && !regEmail.includes('@') && regEmail.trim() !== '' && (
+              {Platform.OS === 'web' && isPhoneMode && (
 
 
 
@@ -265065,7 +265074,7 @@ function HomeScreenContent() {
 
 
 
-                  (regEmail.trim() !== '' && !regEmail.includes('@'))
+                  (isPhoneMode)
 
 
 
@@ -266345,7 +266354,7 @@ function HomeScreenContent() {
 
 
 
-                    {(regEmail.trim() !== '' && !regEmail.includes('@'))
+                    {isPhoneMode
 
 
 
