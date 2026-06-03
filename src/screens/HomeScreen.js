@@ -47565,6 +47565,8 @@ function HomeScreenContent() {
 
   const [isLoading, setIsLoading] = useState(false);
   const [isAppLoading, setIsAppLoading] = useState(true);
+  const [isMinSplashTimeDone, setIsMinSplashTimeDone] = useState(false);
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
 
 
 
@@ -49996,13 +49998,27 @@ function HomeScreenContent() {
 
 
 
-  // --- SEGURIDAD PANTALLA DE CARGA INICIAL ---
+  // --- CONTROL DE PANTALLA DE CARGA INICIAL (SPLASH SCREEN) ---
   useEffect(() => {
-    const timer = setTimeout(() => {
+    const minTimer = setTimeout(() => {
+      setIsMinSplashTimeDone(true);
+    }, 2500);
+
+    const safetyTimer = setTimeout(() => {
       setIsAppLoading(false);
     }, 4500);
-    return () => clearTimeout(timer);
+
+    return () => {
+      clearTimeout(minTimer);
+      clearTimeout(safetyTimer);
+    };
   }, []);
+
+  useEffect(() => {
+    if (isMinSplashTimeDone && isDataLoaded) {
+      setIsAppLoading(false);
+    }
+  }, [isMinSplashTimeDone, isDataLoaded]);
 
   // --- TEMPORIZADOR DE REENVO DE VERIFICACIN DE CORREO ---
 
@@ -65109,7 +65125,7 @@ function HomeScreenContent() {
 
 
         setProducts([]);
-        setIsAppLoading(false);
+        setIsDataLoaded(true);
 
 
 
@@ -71382,7 +71398,7 @@ function HomeScreenContent() {
 
 
         setProducts(items);
-        setIsAppLoading(false);
+        setIsDataLoaded(true);
 
 
 
