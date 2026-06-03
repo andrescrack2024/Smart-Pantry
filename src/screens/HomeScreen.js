@@ -340081,31 +340081,40 @@ function HomeScreenContent() {
               onBlur={() => setIsSupportMessageFocused(false)}
             />
 
-            {/* Contador de caracteres, adjuntar e incluir logs en la misma fila */}
-            <View style={{ 
-              flexDirection: 'row', 
-              justifyContent: 'space-between', 
-              alignItems: 'center', 
+            {/* Row 1: Character Counter & Attachment Option */}
+            <View style={{
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
               width: '100%',
-              marginBottom: 16
+              marginBottom: 12
             }}>
-              <Text style={{ fontSize: 11, color: isDark ? '#8E8E93' : '#777' }}>
+              <Text style={{ fontSize: 11, color: isDark ? '#8E8E93' : '#777', fontWeight: '600' }}>
                 {supportMessage.length} / 500
               </Text>
-              
-              <TouchableOpacity 
-                activeOpacity={0.7} 
+
+              <TouchableOpacity
+                activeOpacity={0.7}
                 style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
                 onPress={() => customAlert("Captura de Pantalla", "La captura de pantalla actual de tu inventario se adjuntará automáticamente a este reporte en la nube de soporte.")}
               >
-                <Text style={{ fontSize: 11, color: isDark ? '#A1A1AA' : '#555' }}>Adjuntar Captura de Pantalla (Opcional)</Text>
+                <Text style={{ fontSize: 11, color: isDark ? '#A1A1AA' : '#555', fontWeight: '600' }}>Adjuntar Captura de Pantalla (Opcional)</Text>
                 <Ionicons name="cloud-upload-outline" size={14} color={isDark ? '#A1A1AA' : '#555'} />
               </TouchableOpacity>
+            </View>
 
-              <TouchableOpacity 
+            {/* Row 2: Logs Toggle Option */}
+            <View style={{
+              flexDirection: 'row',
+              justifyContent: 'flex-end',
+              alignItems: 'center',
+              width: '100%',
+              marginBottom: 16
+            }}>
+              <TouchableOpacity
                 activeOpacity={0.8}
                 onPress={() => setIncludeLogs(!includeLogs)}
-                style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}
               >
                 {/* Mini toggle switch */}
                 <View style={{
@@ -340128,7 +340137,6 @@ function HomeScreenContent() {
                 <Ionicons name="document-text-outline" size={14} color={includeLogs ? '#4CAF50' : (isDark ? '#8E8E93' : '#9CA3AF')} />
               </TouchableOpacity>
             </View>
-
             {/* CANAL DE ENVÍO */}
             <Text style={{ fontSize: 11, fontWeight: '800', color: textPrimary, marginBottom: 8, letterSpacing: 1, textTransform: 'uppercase' }}>Canal de Envío</Text>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20, width: '100%', gap: 6 }}>
@@ -340142,13 +340150,13 @@ function HomeScreenContent() {
                 { 
                   id: 'gmail', 
                   label: 'Gmail Web\n(Redactar)', 
-                  logoUrl: 'https://upload.wikimedia.org/wikipedia/commons/thumb/7/7e/Gmail_icon_%282020%29.svg/512px-Gmail_icon_%282020%29.svg.png', 
+                  logoUrl: GMAIL_LOGO_B64, 
                   activeColor: '#EA4335' 
                 },
                 { 
                   id: 'outlook', 
                   label: 'Outlook Web\n(Redactar)', 
-                  logoUrl: 'https://upload.wikimedia.org/wikipedia/commons/thumb/d/df/Microsoft_Office_Outlook_%282018%E2%80%93present%29.svg/512px-Microsoft_Office_Outlook_%282018%E2%80%93present%29.svg.png', 
+                  logoUrl: OUTLOOK_LOGO_B64, 
                   activeColor: '#0078D4' 
                 }
               ].map((channel) => {
