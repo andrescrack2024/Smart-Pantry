@@ -344514,9 +344514,39 @@ function HomeScreenContent() {
       {customAlertState.visible && (() => {
         const title = (customAlertState.title || '').toLowerCase();
         const message = (customAlertState.message || '').toLowerCase();
-        const isError = title.includes('error') || title.includes('denegado') || title.includes('falla') || title.includes('bloqueado') || title.includes('eliminar') || title.includes('borrar') || message.includes('error') || message.includes('denegado');
-        const isWarning = title.includes('invitado') || title.includes('advertencia') || title.includes('atencion') || title.includes('atención') || title.includes('aviso') || title.includes('cuidado') || message.includes('invitado') || message.includes('advertencia') || message.includes('iniciar sesión') || message.includes('inicie sesión');
-        const isSuccess = title.includes('exito') || title.includes('éxito') || title.includes('correcto') || title.includes('guardado') || title.includes('creado') || title.includes('sincronizado') || title.includes('actualizado');
+        
+        // 1. Scan warning first (incorrect object scanned or scan errors)
+        const isScanWarning = (
+          title.includes('alimento') || title.includes('comida') || title.includes('escaneo') ||
+          title.includes('escanear') || title.includes('escaner') || title.includes('cámara') ||
+          title.includes('camara') || title.includes('objeto') ||
+          message.includes('alimento') || message.includes('comida')
+        ) && !(
+          title.includes('guardado') || title.includes('aproveche') || title.includes('sincronizado') ||
+          title.includes('sincronizada') || title.includes('exito') || title.includes('éxito') ||
+          title.includes('correcto') || title.includes('creado') || title.includes('actualizado') ||
+          title.includes('bienvenido') || title.includes('obligatorio') || message.includes('obligatorio')
+        );
+
+        // 2. General error second (failures, invalid input, restricted, limit)
+        const isError = title.includes('error') || title.includes('falla') || title.includes('denegado') ||
+          title.includes('bloqueado') || title.includes('eliminar') || title.includes('borrar') ||
+          title.includes('incorrecto') || title.includes('incorrecta') || title.includes('invalido') ||
+          title.includes('inválido') || title.includes('no coincide') || title.includes('no registrado') ||
+          title.includes('sin código') || title.includes('sin codigo') || title.includes('restringido') ||
+          title.includes('limite') || title.includes('límite') || title.includes('incomplet') ||
+          title.includes('no verificado') || message.includes('error') || message.includes('denegado') ||
+          message.includes('incorrecto') || message.includes('incorrecta') || message.includes('invalido') ||
+          message.includes('inválido') || message.includes('falla') || message.includes('limite') ||
+          message.includes('límite') || message.includes('bloqueado') || message.includes('obligatorio');
+
+        // 3. Warning (standard warnings and scan warnings)
+        const isWarning = isScanWarning || title.includes('advertencia') || title.includes('atencion') || 
+          title.includes('atención') || title.includes('aviso') || title.includes('cuidado') || 
+          message.includes('advertencia') || message.includes('atencion') || message.includes('atención');
+
+        // 4. Success (default for other normal alerts, like correct/success actions)
+        const isSuccess = !isError && !isWarning && customAlertState.type !== 'confirm' && customAlertState.type !== 'actions';
         
         let alertColor = themeColor;
         let alertBg = `${themeColor}15`;
