@@ -204508,15 +204508,17 @@ function HomeScreenContent() {
 
   if (isAppLoading) {
     return (
-      <View style={{
-        flex: 1,
-        backgroundColor: '#F2EFE9',
-        alignItems: 'center',
-        justifyContent: 'center',
-        height: '100%',
-        width: '100%'
-      }}>
-        {/* Logo and Rotating Arc Wrapper */}
+      <LinearGradient
+        colors={['#FAF9F6', '#E9E5DC']}
+        style={{
+          flex: 1,
+          alignItems: 'center',
+          justifyContent: 'center',
+          height: '100%',
+          width: '100%'
+        }}
+      >
+        {/* Logo and Rotating Arc Wrapper with soft neumorphic glow */}
         <View style={{
           width: 220,
           height: 220,
@@ -204526,73 +204528,114 @@ function HomeScreenContent() {
           {/* Rotating Progress Arc (glowing blue-cyan loading ring) */}
           <Animated.View style={{
             transform: [{ rotate: spin }],
-            width: 210,
-            height: 210,
-            borderRadius: 105,
-            borderWidth: 5,
+            width: 212,
+            height: 212,
+            borderRadius: 106,
+            borderWidth: 6,
             borderColor: 'transparent',
             borderTopColor: '#00E5FF',
             borderLeftColor: '#00E5FF',
             position: 'absolute',
             shadowColor: '#00E5FF',
             shadowOffset: { width: 0, height: 0 },
-            shadowOpacity: 0.8,
-            shadowRadius: 10,
+            shadowOpacity: 0.9,
+            shadowRadius: 15,
             ...Platform.select({
               web: {
-                boxShadow: '0 0 15px rgba(0, 229, 255, 0.5)'
+                boxShadow: '0 0 25px rgba(0, 229, 255, 0.7), inset 0 0 10px rgba(0, 229, 255, 0.4)'
               },
               default: {}
             })
           }} />
 
-          {/* Static Metallic/Chrome Outer Ring & White Circular Card */}
+          {/* Chrome Bevel Ring: Layer 1 (Outer Bevel + Volumetric Drop Shadow) */}
           <View style={{
-            width: 194,
-            height: 194,
-            borderRadius: 97,
-            backgroundColor: '#E5E7EB',
+            width: 196,
+            height: 196,
+            borderRadius: 98,
+            backgroundColor: '#BAC0C6',
             alignItems: 'center',
             justifyContent: 'center',
-            borderWidth: 3,
-            borderColor: '#B8BAC0',
+            borderWidth: 2,
+            borderColor: '#8E9196',
             shadowColor: '#000',
-            shadowOffset: { width: 0, height: 6 },
-            shadowOpacity: 0.1,
-            shadowRadius: 8,
-            elevation: 5,
+            shadowOffset: { width: 4, height: 10 },
+            shadowOpacity: 0.18,
+            shadowRadius: 12,
+            elevation: 8,
             ...Platform.select({
               web: {
-                boxShadow: 'inset 2px 2px 5px rgba(255,255,255,0.7), inset -2px -2px 5px rgba(0,0,0,0.1), 3px 3px 10px rgba(0, 0, 0, 0.08)'
+                boxShadow: '4px 8px 20px rgba(0, 0, 0, 0.12), -4px -8px 20px rgba(255, 255, 255, 0.5)'
               },
               default: {}
             })
           }}>
-            {/* Inner White Card with leaf */}
+            {/* Chrome Bevel Ring: Layer 2 (Metallic Reflective Body) */}
             <View style={{
-              width: 172,
-              height: 172,
-              borderRadius: 86,
-              backgroundColor: '#FFFFFF',
+              width: 188,
+              height: 188,
+              borderRadius: 94,
+              backgroundColor: '#F3F4F6',
               alignItems: 'center',
               justifyContent: 'center',
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.05,
-              shadowRadius: 5,
-              elevation: 2,
+              borderWidth: 3,
+              borderTopColor: '#FFFFFF',
+              borderLeftColor: '#FFFFFF',
+              borderRightColor: '#A3A6AB',
+              borderBottomColor: '#A3A6AB',
               ...Platform.select({
                 web: {
-                  boxShadow: 'inset 0 0 10px rgba(0,0,0,0.02)'
+                  boxShadow: 'inset 2px 2px 4px rgba(255,255,255,0.9), inset -2px -2px 4px rgba(0,0,0,0.15)'
                 },
                 default: {}
               })
             }}>
-              <Ionicons name="leaf" size={85} color="#10B981" />
+              {/* Inner White Logo Card with deep emboss */}
+              <View style={{
+                width: 172,
+                height: 172,
+                borderRadius: 86,
+                backgroundColor: '#FFFFFF',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderWidth: 1,
+                borderColor: '#E5E7EB',
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.05,
+                shadowRadius: 4,
+                elevation: 2,
+                ...Platform.select({
+                  web: {
+                    boxShadow: 'inset 2px 2px 6px rgba(0,0,0,0.06), inset -2px -2px 6px rgba(255,255,255,0.8)'
+                  },
+                  default: {}
+                })
+              }}>
+                {/* Floating 3D Leaf Logo with drop shadow */}
+                <Ionicons 
+                  name="leaf" 
+                  size={85} 
+                  color="#10B981" 
+                  style={{
+                    shadowColor: '#0A361F',
+                    shadowOffset: { width: 3, height: 6 },
+                    shadowOpacity: 0.38,
+                    shadowRadius: 5,
+                    elevation: 4,
+                    ...Platform.select({
+                      web: {
+                        filter: 'drop-shadow(3px 6px 5px rgba(10, 54, 31, 0.35))'
+                      },
+                      default: {}
+                    })
+                  }}
+                />
+              </View>
             </View>
           </View>
         </View>
-      </View>
+      </LinearGradient>
     );
   }
 
