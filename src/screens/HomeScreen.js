@@ -47564,6 +47564,7 @@ function HomeScreenContent() {
 
 
   const [isLoading, setIsLoading] = useState(false);
+  const [isAppLoading, setIsAppLoading] = useState(true);
 
 
 
@@ -49994,6 +49995,14 @@ function HomeScreenContent() {
 
 
 
+
+  // --- SEGURIDAD PANTALLA DE CARGA INICIAL ---
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsAppLoading(false);
+    }, 4500);
+    return () => clearTimeout(timer);
+  }, []);
 
   // --- TEMPORIZADOR DE REENVO DE VERIFICACIN DE CORREO ---
 
@@ -65100,6 +65109,7 @@ function HomeScreenContent() {
 
 
         setProducts([]);
+        setIsAppLoading(false);
 
 
 
@@ -71372,6 +71382,7 @@ function HomeScreenContent() {
 
 
         setProducts(items);
+        setIsAppLoading(false);
 
 
 
@@ -204461,6 +204472,172 @@ function HomeScreenContent() {
 
 
 
+
+  if (isAppLoading) {
+    return (
+      <View style={{
+        flex: 1,
+        backgroundColor: '#F3F4F6',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: 20,
+        height: '100%',
+        width: '100%'
+      }}>
+        {/* Glow Circular Card Container */}
+        <View style={{
+          width: 210,
+          height: 210,
+          borderRadius: 105,
+          backgroundColor: 'transparent',
+          alignItems: 'center',
+          justifyContent: 'center',
+          borderWidth: 4,
+          borderColor: '#00E5FF',
+          shadowColor: '#00E5FF',
+          shadowOffset: { width: 0, height: 0 },
+          shadowOpacity: 0.8,
+          shadowRadius: 15,
+          elevation: 10,
+          ...Platform.select({
+            web: {
+              boxShadow: '0 0 25px rgba(0, 229, 255, 0.6), inset 0 0 15px rgba(0, 229, 255, 0.4)'
+            },
+            default: {}
+          })
+        }}>
+          <View style={{
+            width: 176,
+            height: 176,
+            borderRadius: 88,
+            backgroundColor: '#FFFFFF',
+            alignItems: 'center',
+            justifyContent: 'center',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 8 },
+            shadowOpacity: 0.1,
+            shadowRadius: 10,
+            elevation: 5,
+            ...Platform.select({
+              web: {
+                boxShadow: '5px 5px 15px rgba(0, 0, 0, 0.05), -5px -5px 15px rgba(255, 255, 255, 0.8)'
+              },
+              default: {}
+            })
+          }}>
+            <Ionicons name="leaf" size={90} color="#10B981" />
+          </View>
+        </View>
+
+        {/* Branding text */}
+        <Text style={{
+          fontSize: 34,
+          fontWeight: '800',
+          color: '#1F2937',
+          marginTop: 35,
+          letterSpacing: -0.5
+        }}>SmartPantry</Text>
+        
+        <Text style={{
+          fontSize: 18,
+          color: '#6B7280',
+          marginTop: 6,
+          fontWeight: '500'
+        }}>Tu Despensa Inteligente</Text>
+
+        {/* Loading messages */}
+        <View style={{
+          marginTop: 70,
+          alignItems: 'center'
+        }}>
+          <Text style={{
+            fontSize: 16,
+            fontWeight: '600',
+            color: '#374151',
+            letterSpacing: 0.2
+          }}>Sincronizando inventario...</Text>
+          
+          <Text style={{
+            fontSize: 14,
+            color: '#9CA3AF',
+            marginTop: 6
+          }}>Cargando tus alimentos...</Text>
+        </View>
+
+        {/* Neumorphic 8-icon grid at the bottom */}
+        <View style={{
+          position: 'absolute',
+          bottom: 50,
+          width: '100%',
+          maxWidth: 320,
+          alignItems: 'center'
+        }}>
+          {/* Row 1 */}
+          <View style={{
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            width: '100%',
+            marginBottom: 16
+          }}>
+            {['cube-outline', 'nutrition', 'water', 'restaurant'].map((icon, idx) => (
+              <View key={'grid-r1-' + idx} style={{
+                width: 60,
+                height: 60,
+                borderRadius: 18,
+                backgroundColor: '#F3F4F6',
+                alignItems: 'center',
+                justifyContent: 'center',
+                shadowColor: '#000',
+                shadowOffset: { width: 4, height: 4 },
+                shadowOpacity: 0.08,
+                shadowRadius: 5,
+                elevation: 3,
+                ...Platform.select({
+                  web: {
+                    boxShadow: '4px 4px 8px #D1D5DB, -4px -4px 8px #FFFFFF'
+                  },
+                  default: {}
+                })
+              }}>
+                <Ionicons name={icon} size={24} color="#8E9194" />
+              </View>
+            ))}
+          </View>
+          
+          {/* Row 2 */}
+          <View style={{
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            width: '100%'
+          }}>
+            {['star', 'leaf', 'leaf', 'leaf'].map((icon, idx) => (
+              <View key={'grid-r2-' + idx} style={{
+                width: 60,
+                height: 60,
+                borderRadius: 18,
+                backgroundColor: '#F3F4F6',
+                alignItems: 'center',
+                justifyContent: 'center',
+                shadowColor: '#000',
+                shadowOffset: { width: 4, height: 4 },
+                shadowOpacity: 0.08,
+                shadowRadius: 5,
+                elevation: 3,
+                ...Platform.select({
+                  web: {
+                    boxShadow: '4px 4px 8px #D1D5DB, -4px -4px 8px #FFFFFF'
+                  },
+                  default: {}
+                })
+              }}>
+                <Ionicons name={icon} size={24} color="#8E9194" />
+              </View>
+            ))}
+          </View>
+        </View>
+      </View>
+    );
+  }
 
   return (
 
