@@ -339763,47 +339763,47 @@ function HomeScreenContent() {
             <View style={[styles.shareSheetHandleAndroid, { backgroundColor: isDark ? '#4E463D' : '#E2E8F0' }]} />
 
             {/* Header */}
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, width: '100%' }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, width: '100%' }}>
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Text style={[styles.shareSheetTitleAndroid, { color: textPrimary, marginBottom: 0, fontWeight: 'bold', fontSize: 18 }]}>Centro de Soporte Técnico</Text>
                 <View style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: 16,
-                  backgroundColor: isDark ? 'rgba(76, 175, 80, 0.2)' : 'rgba(76, 175, 80, 0.1)',
+                  width: 24,
+                  height: 24,
+                  borderRadius: 12,
+                  backgroundColor: '#4CAF50',
                   justifyContent: 'center',
                   alignItems: 'center',
-                  marginRight: 10
+                  marginLeft: 8
                 }}>
-                  <Ionicons name="headset-outline" size={16} color={themeColor} />
+                  <Ionicons name="headset" size={13} color="#fff" />
                 </View>
-                <Text style={[styles.shareSheetTitleAndroid, { color: textPrimary, marginBottom: 0, fontWeight: 'bold', fontSize: 18 }]}>Soporte Técnico</Text>
               </View>
               <TouchableOpacity
                 style={{
-                  width: 30,
-                  height: 30,
-                  borderRadius: 15,
-                  backgroundColor: isDark ? '#2C2C2E' : '#F2F2F7',
+                  width: 24,
+                  height: 24,
+                  borderRadius: 12,
+                  backgroundColor: isDark ? '#3A3A3C' : '#B3B3B3',
                   justifyContent: 'center',
                   alignItems: 'center'
                 }}
                 onPress={() => { setSupportSubject("Falla de Escáner"); setSelectedReportType("scanner"); setSupportMessage(""); setShowSupportModal(false); }}
               >
-                <Ionicons name="close" size={18} color={isDark ? "#A1A1AA" : "#6B7280"} />
+                <Ionicons name="close" size={16} color="#FFFFFF" />
               </TouchableOpacity>
             </View>
 
-            <Text style={{ fontSize: 13, color: textSecondary, marginBottom: 20, lineHeight: 18 }}>
-              Envía un reporte detallado al equipo de soporte de Smart Pantry. Responderemos lo antes posible.
+            <Text style={{ fontSize: 12, color: textSecondary, marginBottom: 16, lineHeight: 17 }}>
+              Envía un reporte detallado al equipo de soporte. Para evitar el spam, hay un límite de envío de 5 minutos.
             </Text>
 
             {/* TIPO DE REPORTE */}
             <Text style={{ fontSize: 11, fontWeight: '800', color: textPrimary, marginBottom: 8, letterSpacing: 1 }}>TIPO DE REPORTE</Text>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20, width: '100%', gap: 6 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16, width: '100%', gap: 6 }}>
               {[
                 { id: 'scanner', label: 'Falla de Escáner', icon: 'qr-code-outline' },
-                { id: 'sync', label: 'Error de Sincronización', icon: 'sync-outline' },
-                { id: 'reported', label: 'Sincronización\nreportada', icon: 'document-text-outline' },
+                { id: 'sync', label: 'Error de Sincronización', icon: 'cloud-offline-outline' },
+                { id: 'reported', label: 'Sincronización\nreportada', icon: 'list-outline' },
                 { id: 'other', label: 'Otro', icon: 'help-circle-outline' }
               ].map((item) => {
                 const isActive = selectedReportType === item.id;
@@ -339813,27 +339813,27 @@ function HomeScreenContent() {
                     onPress={() => handleSelectReportType(item.id)}
                     style={{
                       flex: 1,
-                      backgroundColor: isActive ? (isDark ? 'rgba(76, 175, 80, 0.15)' : 'rgba(76, 175, 80, 0.08)') : (isDark ? '#1C1C1E' : '#FFFFFF'),
+                      backgroundColor: isActive ? (isDark ? '#242426' : '#FFFFFF') : (isDark ? '#1C1C1E' : '#F5F5F5'),
                       borderWidth: 1.5,
-                      borderColor: isActive ? themeColor : (isDark ? '#2D2D30' : '#E5E7EB'),
+                      borderColor: isActive ? '#4CAF50' : (isDark ? '#2D2D30' : '#E0E0E0'),
                       borderRadius: 10,
                       paddingVertical: 10,
                       paddingHorizontal: 4,
                       alignItems: 'center',
                       justifyContent: 'center',
-                      minHeight: 64
+                      minHeight: 68
                     }}
                   >
                     <Ionicons 
                       name={item.icon} 
                       size={20} 
-                      color={isActive ? themeColor : (isDark ? '#8E8E93' : '#9CA3AF')} 
+                      color={isActive ? '#4CAF50' : (isDark ? '#8E8E93' : '#777777')} 
                       style={{ marginBottom: 6 }}
                     />
                     <Text style={{ 
-                      fontSize: 9, 
+                      fontSize: 8.5, 
                       fontWeight: isActive ? '700' : '500', 
-                      color: isActive ? textPrimary : (isDark ? '#8E8E93' : '#9CA3AF'),
+                      color: isActive ? textPrimary : (isDark ? '#8E8E93' : '#777777'),
                       textAlign: 'center',
                       lineHeight: 11
                     }}>
@@ -339849,23 +339849,24 @@ function HomeScreenContent() {
             <View style={{
               flexDirection: 'row',
               alignItems: 'center',
-              backgroundColor: isSupportSubjectFocused ? (isDark ? '#1F1F22' : '#FFFFFF') : (isDark ? '#1C1C1E' : '#F9FAFB'),
-              borderWidth: 1.5,
-              borderColor: isSupportSubjectFocused ? themeColor : (isDark ? '#2D2D30' : '#E5E7EB'),
+              backgroundColor: isDark ? '#1C1C1E' : '#F2F2F2',
+              borderWidth: 1,
+              borderColor: isDark ? '#2D2D30' : '#E0E0E0',
               borderRadius: 10,
               paddingHorizontal: 12,
               marginBottom: 16,
-              height: 48,
+              height: 46,
               width: '100%'
             }}>
-              <Ionicons name="document-text-outline" size={18} color={isSupportSubjectFocused ? themeColor : (isDark ? '#8E8E93' : '#9CA3AF')} style={{ marginRight: 8 }} />
+              <Ionicons name="document-text-outline" size={18} color={isDark ? '#8E8E93' : '#777777'} style={{ marginRight: 8 }} />
               <TextInput
                 style={{
                   flex: 1,
                   fontSize: 13,
                   color: textPrimary,
                   padding: 0,
-                  height: '100%'
+                  height: '100%',
+                  fontWeight: '600'
                 }}
                 placeholder="Ej: Falla en escáner inteligente, sugerencia..."
                 placeholderTextColor={isDark ? '#7C7C80' : '#9CA3AF'}
@@ -339880,9 +339881,9 @@ function HomeScreenContent() {
             <Text style={{ fontSize: 12, fontWeight: '700', color: textPrimary, marginBottom: 6 }}>Descripción del Reporte</Text>
             <TextInput
               style={{
-                backgroundColor: isSupportMessageFocused ? (isDark ? '#1F1F22' : '#FFFFFF') : (isDark ? '#1C1C1E' : '#F9FAFB'),
-                borderWidth: 1.5,
-                borderColor: isSupportMessageFocused ? themeColor : (isDark ? '#2D2D30' : '#E5E7EB'),
+                backgroundColor: isDark ? '#1C1C1E' : '#F2F2F2',
+                borderWidth: 1,
+                borderColor: isDark ? '#2D2D30' : '#E0E0E0',
                 borderRadius: 10,
                 color: textPrimary,
                 fontSize: 13,
@@ -339903,72 +339904,53 @@ function HomeScreenContent() {
               onBlur={() => setIsSupportMessageFocused(false)}
             />
 
-            {/* Contador de caracteres */}
-            <View style={{ alignSelf: 'flex-end', marginTop: 2, marginBottom: 16 }}>
-              <Text style={{ fontSize: 11, color: isDark ? '#8E8E93' : '#9CA3AF' }}>
-                {supportMessage.length} / 500
-              </Text>
-            </View>
-
-            {/* Fila de Log de Errores con Interruptor */}
+            {/* Contador de caracteres, adjuntar e incluir logs en la misma fila */}
             <View style={{ 
               flexDirection: 'row', 
               justifyContent: 'space-between', 
               alignItems: 'center', 
               width: '100%',
-              backgroundColor: isDark ? '#1C1C1E' : '#FFFFFF',
-              borderRadius: 10,
-              paddingVertical: 12,
-              paddingHorizontal: 12,
-              borderWidth: 1.5,
-              borderColor: isDark ? '#2D2D30' : '#E5E7EB',
-              marginBottom: 20
+              marginBottom: 16
             }}>
+              <Text style={{ fontSize: 11, color: isDark ? '#8E8E93' : '#777' }}>
+                {supportMessage.length} / 500
+              </Text>
+              
+              <TouchableOpacity 
+                activeOpacity={0.7} 
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                onPress={() => customAlert("Captura de Pantalla", "La captura de pantalla actual de tu inventario se adjuntará automáticamente a este reporte en la nube de soporte.")}
+              >
+                <Text style={{ fontSize: 11, color: isDark ? '#A1A1AA' : '#555' }}>Adjuntar Captura de Pantalla (Opcional)</Text>
+                <Ionicons name="cloud-upload-outline" size={14} color={isDark ? '#A1A1AA' : '#555'} />
+              </TouchableOpacity>
+
               <TouchableOpacity 
                 activeOpacity={0.8}
                 onPress={() => setIncludeLogs(!includeLogs)}
-                style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
               >
-                {/* Custom toggle switch */}
+                {/* Mini toggle switch */}
                 <View style={{
-                  width: 44,
-                  height: 24,
-                  borderRadius: 12,
-                  backgroundColor: includeLogs ? themeColor : (isDark ? '#3A3A3C' : '#E5E7EB'),
-                  padding: 2,
+                  width: 32,
+                  height: 18,
+                  borderRadius: 9,
+                  backgroundColor: includeLogs ? '#4CAF50' : (isDark ? '#3A3A3C' : '#D1D5DB'),
+                  padding: 1.5,
                   justifyContent: 'center',
-                  marginRight: 10,
                 }}>
                   <View style={{
-                    width: 20,
-                    height: 20,
-                    borderRadius: 10,
+                    width: 15,
+                    height: 15,
+                    borderRadius: 7.5,
                     backgroundColor: '#FFFFFF',
                     alignSelf: includeLogs ? 'flex-end' : 'flex-start',
-                    shadowColor: '#000',
-                    shadowOffset: { width: 0, height: 1 },
-                    shadowOpacity: 0.15,
-                    shadowRadius: 1.5,
-                    elevation: 2,
                   }} />
                 </View>
-                
-                <Text style={{ 
-                  fontSize: 13, 
-                  fontWeight: '600', 
-                  color: textPrimary
-                }}>
-                  Incluir Log de Errores (Opcional)
-                </Text>
+                <Text style={{ fontSize: 11, fontWeight: '600', color: textPrimary }}>Incluir Log</Text>
+                <Ionicons name="document-text-outline" size={14} color={includeLogs ? '#4CAF50' : (isDark ? '#8E8E93' : '#9CA3AF')} />
               </TouchableOpacity>
-              
-              <Ionicons 
-                name="document-text-outline" 
-                size={18} 
-                color={includeLogs ? themeColor : (isDark ? '#8E8E93' : '#9CA3AF')} 
-              />
             </View>
-
 
             {/* CANAL DE ENVÍO */}
             <Text style={{ fontSize: 11, fontWeight: '800', color: textPrimary, marginBottom: 8, letterSpacing: 1, textTransform: 'uppercase' }}>Canal de Envío</Text>
@@ -339978,7 +339960,7 @@ function HomeScreenContent() {
                   id: 'direct', 
                   label: 'Envío Directo\n(Instantáneo)', 
                   icon: 'cloud-upload-outline', 
-                  activeColor: themeColor 
+                  activeColor: '#4CAF50' 
                 },
                 { 
                   id: 'gmail', 
@@ -340000,9 +339982,9 @@ function HomeScreenContent() {
                     onPress={() => setSendingChannel(channel.id)}
                     style={{
                       flex: 1,
-                      backgroundColor: isActive ? (isDark ? 'rgba(76, 175, 80, 0.15)' : 'rgba(76, 175, 80, 0.08)') : (isDark ? '#1C1C1E' : '#FFFFFF'),
+                      backgroundColor: isActive ? (isDark ? '#242426' : '#FFFFFF') : (isDark ? '#1C1C1E' : '#F5F5F5'),
                       borderWidth: 1.5,
-                      borderColor: isActive ? channel.activeColor : (isDark ? '#2D2D30' : '#E5E7EB'),
+                      borderColor: isActive ? '#4CAF50' : (isDark ? '#2D2D30' : '#E0E0E0'),
                       borderRadius: 10,
                       paddingVertical: 10,
                       paddingHorizontal: 4,
@@ -340026,14 +340008,14 @@ function HomeScreenContent() {
                       <Ionicons
                         name={channel.icon}
                         size={20}
-                        color={isActive ? channel.activeColor : (isDark ? '#8E8E93' : '#9CA3AF')}
+                        color={isActive ? '#4CAF50' : (isDark ? '#8E8E93' : '#777777')}
                         style={{ marginBottom: 6 }}
                       />
                     )}
                     <Text style={{
                       fontSize: 8.5,
                       fontWeight: isActive ? '700' : '500',
-                      color: isActive ? textPrimary : (isDark ? '#8E8E93' : '#9CA3AF'),
+                      color: isActive ? textPrimary : (isDark ? '#8E8E93' : '#777777'),
                       textAlign: 'center',
                       lineHeight: 11
                     }}>
@@ -340047,7 +340029,7 @@ function HomeScreenContent() {
             {/* Botón de Enviar */}
             <TouchableOpacity
               style={{
-                backgroundColor: sendingChannel === 'direct' ? themeColor : (sendingChannel === 'gmail' ? '#EA4335' : '#0078D4'),
+                backgroundColor: '#4CAF50',
                 width: '100%',
                 borderRadius: 24,
                 height: 48,
@@ -340065,19 +340047,25 @@ function HomeScreenContent() {
               activeOpacity={0.8}
             >
               <View style={{ position: 'absolute', left: 16 }}>
-                <Ionicons name={sendingChannel === 'direct' ? "cloud-upload" : "mail"} size={18} color="#fff" />
+                <View style={{ flexDirection: 'row', gap: 3 }}>
+                  <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: '#fff', opacity: 0.4 }} />
+                  <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: '#fff', opacity: 0.7 }} />
+                  <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: '#fff', opacity: 1 }} />
+                </View>
               </View>
               <Text style={{ color: '#fff', fontSize: 14, fontWeight: '700' }}>
                 {sendingChannel === 'direct' ? 'Enviar Reporte Directo (Nube)' :
                  sendingChannel === 'gmail' ? 'Enviar vía Gmail Web' : 'Enviar vía Outlook Web'}
               </Text>
               <View style={{ position: 'absolute', right: 16 }}>
-                <Ionicons name="sparkles" size={18} color="#fff" />
+                <Ionicons name="cloud-upload" size={18} color="#fff" />
               </View>
             </TouchableOpacity>
           </View>
           </TouchableWithoutFeedback>
         </TouchableOpacity>
+      </ModalWrapper>
+
       {/* --- BARRA DE NAVEGACIÓN BAJA CON SAFE AREA DINÁMICA --- */}
 
 
