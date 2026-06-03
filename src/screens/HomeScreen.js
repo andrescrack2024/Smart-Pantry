@@ -29510,6 +29510,7 @@ function HomeScreenContent() {
   const [customHexInput, setCustomHexInput] = useState('');
   const [isSupportSubjectFocused, setIsSupportSubjectFocused] = useState(false);
   const [isSupportMessageFocused, setIsSupportMessageFocused] = useState(false);
+  const [isSendingSupport, setIsSendingSupport] = useState(false);
 
   const handleSelectReportType = (typeId) => {
     setSelectedReportType(typeId);
@@ -29531,6 +29532,7 @@ function HomeScreenContent() {
       return;
     }
 
+    setIsSendingSupport(true);
     try {
       const now = Date.now();
       const lastSentStr = await AsyncStorage.getItem('@smart_pantry_last_support_sent');
@@ -29642,6 +29644,8 @@ function HomeScreenContent() {
     } catch (err) {
       console.error("Error al preparar correo de soporte:", err);
       customAlert("Error", "No se pudo abrir el cliente de correo para enviar el reporte.");
+    } finally {
+      setIsSendingSupport(false);
     }
   };
 
@@ -340231,9 +340235,11 @@ function HomeScreenContent() {
               onPress={handleSendSupportReport}
               activeOpacity={0.8}
             >
-              <View style={{ position: 'absolute', left: 16 }}>
+              {isSendingSupport && (
+                <View style={{ position: 'absolute', left: 16 }}>
                 <ActivityIndicator size="small" color="#FFFFFF" />
-              </View>
+                </View>
+              )}
               <Text style={{ color: '#fff', fontSize: 14, fontWeight: '700' }}>
                 {sendingChannel === 'direct' ? 'Enviar Reporte Directo (Nube)' :
                  sendingChannel === 'gmail' ? 'Enviar vía Gmail Web' : 'Enviar vía Outlook Web'}
