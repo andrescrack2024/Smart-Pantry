@@ -340010,7 +340010,7 @@ function HomeScreenContent() {
                     <Text style={{ 
                       fontSize: 8.5, 
                       fontWeight: isActive ? '700' : '500', 
-                      color: isActive ? textPrimary : (isDark ? '#8E8E93' : '#777777'),
+                      color: isActive ? '#4CAF50' : (isDark ? '#8E8E93' : '#777777'),
                       textAlign: 'center',
                       lineHeight: 11
                     }}>
@@ -340124,7 +340124,7 @@ function HomeScreenContent() {
                     alignSelf: includeLogs ? 'flex-end' : 'flex-start',
                   }} />
                 </View>
-                <Text style={{ fontSize: 11, fontWeight: '600', color: textPrimary }}>Incluir Log</Text>
+                <Text style={{ fontSize: 11, fontWeight: '600', color: textPrimary }}>Incluir Log de Errores (Opcional)</Text>
                 <Ionicons name="document-text-outline" size={14} color={includeLogs ? '#4CAF50' : (isDark ? '#8E8E93' : '#9CA3AF')} />
               </TouchableOpacity>
             </View>
@@ -340192,7 +340192,7 @@ function HomeScreenContent() {
                     <Text style={{
                       fontSize: 8.5,
                       fontWeight: isActive ? '700' : '500',
-                      color: isActive ? textPrimary : (isDark ? '#8E8E93' : '#777777'),
+                      color: isActive ? '#4CAF50' : (isDark ? '#8E8E93' : '#777777'),
                       textAlign: 'center',
                       lineHeight: 11
                     }}>
@@ -340224,11 +340224,7 @@ function HomeScreenContent() {
               activeOpacity={0.8}
             >
               <View style={{ position: 'absolute', left: 16 }}>
-                <View style={{ flexDirection: 'row', gap: 3 }}>
-                  <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: '#fff', opacity: 0.4 }} />
-                  <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: '#fff', opacity: 0.7 }} />
-                  <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: '#fff', opacity: 1 }} />
-                </View>
+                <ActivityIndicator size="small" color="#FFFFFF" />
               </View>
               <Text style={{ color: '#fff', fontSize: 14, fontWeight: '700' }}>
                 {sendingChannel === 'direct' ? 'Enviar Reporte Directo (Nube)' :
